@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Student {
+  id                 Int                         @id @default(autoincrement()) @db.UnsignedInt
+  serialNumber       String?                     @map("serial_number") @db.VarChar(32)
+  registrationNumber String                      @unique(map: "uq_students_registration_number") @map("registration_number") @db.VarChar(64)
+  fullName           String                      @map("full_name") @db.VarChar(160)
+  className          String                      @map("class_name") @db.VarChar(80)
+  distanceKm         Decimal?                    @map("distance_km") @db.Decimal(8, 2)
+  tagNo              String?                     @map("tag_no") @db.VarChar(32)
+  area               String                      @db.VarChar(180)
+  phone              String                      @db.VarChar(32)
+  secondaryPhone     String?                     @map("secondary_phone") @db.VarChar(32)
+  createdAt          DateTime                    @default(now()) @map("created_at")
+  updatedAt          DateTime                    @updatedAt @map("updated_at")
+  vehicleAssignments StudentVehicleAssignment[]
+  routeAssignments   StudentRouteAssignment[]
+
+  @@index([fullName], map: "idx_students_name")
+  @@index([tagNo], map: "idx_students_tag_no")
+  @@map("students")
+}
+
+model Driver {
+  id                 Int                       @id @default(autoincrement()) @db.UnsignedInt
+  fullName           String                    @map("full_name") @db.VarChar(160)
+  phone              String                    @unique(map: "uq_drivers_phone") @db.VarChar(32)
+  licenseNumber      String?                   @map("license_number") @db.VarChar(80)
+  status             DriverStatus              @default(Available)
+  docsStatus         DocsStatus                @default(Pending) @map("docs_status")
+  route              String?                   @db.VarChar(120)
+  createdAt          DateTime                  @default(now()) @map("created_at")
+  updatedAt          DateTime                  @updatedAt @map("updated_at")
+  vehicleAssignments DriverVehicleAssignment[]
+
+  @@index([fullName], map: "idx_drivers_name")
+  @@index([status], map: "idx_drivers_status")
+  @@map("drivers")
+}
+
+model Vehicle {
+  id                 Int                         @id @default(autoincrement()) @db.UnsignedInt
+  vehicleCode        String                      @unique(map: "uq_vehicles_code") @map("vehicle_code") @db.VarChar(32)
+  registrationNumber String                      @unique(map: "uq_vehicles_registration_number") @map("registration_number") @db.VarChar(64)
+  route              String?                     @db.VarChar(120)
+  status             VehicleStatus              @default(Offline)
+  speedKmh           Decimal                     @default(0) @map("speed_kmh") @db.Decimal(8, 2)
+  mapX               Decimal                     @default(50) @map("map_x") @db.Decimal(5, 2)
+  mapY               Decimal                     @default(50) @map("map_y") @db.Decimal(5, 2)
+  createdAt          DateTime                    @default(now()) @map("created_at")
+  updatedAt          DateTime                    @updatedAt @map("updated_at")
+  driverAssignments  DriverVehicleAssignment[]
+  studentAssignments StudentVehicleAssignment[]
+  routes             TransportRoute[]
+
+  @@index([status], map: "idx_vehicles_status")
+  @@map("vehicles")
+}
+
+model TransportRoute {
+  id                 Int                      @id @default(autoincrement()) @db.UnsignedInt
+  routeCode          String                   @unique(map: "uq_routes_code") @map("route_code") @db.VarChar(32)
+  name               String                   @db.VarChar(120)
+  description        String?                  @db.VarChar(255)
+  vehicleId          Int?                     @map("vehicle_id") @db.UnsignedInt
+  createdAt          DateTime                 @default(now()) @map("created_at")
+  updatedAt          DateTime                 @updatedAt @map("updated_at")
+  vehicle            Vehicle?                 @relation(fields: [vehicleId], references: [id], onDelete: SetNull, map: "fk_routes_vehicle")
+  studentAssignments StudentRouteAssignment[]
+
+  @@index([name], map: "idx_routes_name")
+  @@index([vehicleId], map: "idx_routes_vehicle")
+  @@map("routes")
+}
+
+model DriverVehicleAssignment {
+  id           Int       @id @default(autoincrement()) @db.UnsignedInt
+  driverId     Int       @map("driver_id") @db.UnsignedInt
+  vehicleId    Int       @map("vehicle_id") @db.UnsignedInt
+  route        String?   @db.VarChar(120)
+  assignedAt   DateTime  @default(now()) @map("assigned_at")
+  unassignedAt DateTime? @map("unassigned_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  driver       Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade, map: "fk_driver_vehicle_driver")
+  vehicle      Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade, map: "fk_driver_vehicle_vehicle")
+
+  @@index([vehicleId, unassignedAt], map: "idx_driver_vehicle_active_vehicle")
+  @@index([driverId, unassignedAt], map: "idx_driver_vehicle_active_driver")
+  @@map("driver_vehicle_assignments")
+}
+
+model StudentVehicleAssignment {
+  id           Int       @id @default(autoincrement()) @db.UnsignedInt
+  studentId    Int       @map("student_id") @db.UnsignedInt
+  vehicleId    Int       @map("vehicle_id") @db.UnsignedInt
+  pickupOrder  Int?      @map("pickup_order") @db.UnsignedInt
+  notes        String?   @db.VarChar(255)
+  assignedAt   DateTime  @default(now()) @map("assigned_at")
+  unassignedAt DateTime? @map("unassigned_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_student_vehicle_student")
+  vehicle      Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade, map: "fk_student_vehicle_vehicle")
+
+  @@index([vehicleId, unassignedAt], map: "idx_student_vehicle_active_vehicle")
+  @@index([studentId, unassignedAt], map: "idx_student_vehicle_active_student")
+  @@map("student_vehicle_assignments")
+}
+
+model StudentRouteAssignment {
+  id           Int            @id @default(autoincrement()) @db.UnsignedInt
+  studentId    Int            @map("student_id") @db.UnsignedInt
+  routeId      Int            @map("route_id") @db.UnsignedInt
+  pickupOrder  Int?           @map("pickup_order") @db.UnsignedInt
+  notes        String?        @db.VarChar(255)
+  assignedAt   DateTime       @default(now()) @map("assigned_at")
+  unassignedAt DateTime?      @map("unassigned_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  student      Student        @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_student_route_student")
+  route        TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade, map: "fk_student_route_route")
+
+  @@index([routeId, unassignedAt], map: "idx_student_route_active_route")
+  @@index([studentId, unassignedAt], map: "idx_student_route_active_student")
+  @@map("student_route_assignments")
+}
+
+enum DriverStatus {
+  On_duty   @map("On duty")
+  Available
+  Off_duty  @map("Off duty")
+  At_school @map("At school")
+}
+
+enum DocsStatus {
+  Verified
+  One_expiring @map("1 expiring")
+  Two_pending  @map("2 pending")
+  Pending
+  Expired
+}
+
+enum VehicleStatus {
+  On_route  @map("On route")
+  At_school @map("At school")
+  Offline
+}
