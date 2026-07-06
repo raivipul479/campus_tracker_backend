@@ -7,7 +7,11 @@ import { errorHandler, notFound } from './errors.js';
 import { router } from './routes/index.js';
 
 export const app = express();
-const allowedOrigins = config.corsOrigin.split(',').map(origin => origin.trim());
+const allowedOrigins = [
+  ...config.corsOrigin.split(',').map(origin => origin.trim()),
+  'https://location-app-tfks.onrender.com',
+  'https://location-app-1-61r2.onrender.com'
+].filter(Boolean);
 
 app.use(helmet());
 app.use(cors({ origin: allowedOrigins }));
