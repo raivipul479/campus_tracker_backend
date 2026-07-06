@@ -13,9 +13,9 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO drivers (full_name, phone, license_number, status, docs_status, route) VALUES
   ('Ramesh Kumar', '+91 98107 24561', 'DL-0420110123456', 'On duty', 'Verified', 'North Loop'),
   ('Sunil Yadav', '+91 99584 10882', NULL, 'On duty', 'Verified', 'East Park'),
-  ('Amit Singh', '+91 98713 54119', NULL, 'At school', '1 expiring', 'South City'),
+  ('Amit Singh', '+919871354119', NULL, 'At school', 'ExpiringSoon', 'South City'),
   ('Deepak Rana', '+91 98188 40912', NULL, 'Off duty', 'Verified', 'West End'),
-  ('Manoj Verma', '+91 99710 36481', NULL, 'Available', '2 pending', NULL)
+  ('Manoj Verma', '+919971036481', NULL, 'Available', 'Pending', NULL)
 ON DUPLICATE KEY UPDATE
   status = VALUES(status),
   docs_status = VALUES(docs_status),

@@ -1,3 +1,17 @@
+CREATE TABLE IF NOT EXISTS super_admins (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  email VARCHAR(190) NOT NULL,
+  full_name VARCHAR(160) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  password_salt VARCHAR(64) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  last_login_at DATETIME NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_super_admins_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS students (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   serial_number VARCHAR(32) NULL,
@@ -14,7 +28,9 @@ CREATE TABLE IF NOT EXISTS students (
   PRIMARY KEY (id),
   UNIQUE KEY uq_students_registration_number (registration_number),
   KEY idx_students_name (full_name),
-  KEY idx_students_tag_no (tag_no)
+  UNIQUE KEY uq_students_tag_no (tag_no),
+  KEY idx_students_phone (phone),
+  KEY idx_students_secondary_phone (secondary_phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS drivers (
@@ -23,7 +39,7 @@ CREATE TABLE IF NOT EXISTS drivers (
   phone VARCHAR(32) NOT NULL,
   license_number VARCHAR(80) NULL,
   status ENUM('On duty', 'Available', 'Off duty', 'At school') NOT NULL DEFAULT 'Available',
-  docs_status ENUM('Verified', '1 expiring', '2 pending', 'Pending', 'Expired') NOT NULL DEFAULT 'Pending',
+  docs_status ENUM('Verified', 'ExpiringSoon', 'Pending', 'Expired') NOT NULL DEFAULT 'Pending',
   route VARCHAR(120) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -50,6 +66,22 @@ CREATE TABLE IF NOT EXISTS vehicles (
   KEY idx_vehicles_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS routes (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  route_code VARCHAR(32) NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  description VARCHAR(255) NULL,
+  fee DECIMAL(10,2) NOT NULL DEFAULT 0,
+  vehicle_id INT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_routes_code (route_code),
+  KEY idx_routes_name (name),
+  KEY idx_routes_vehicle (vehicle_id),
+  CONSTRAINT fk_routes_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS driver_vehicle_assignments (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   driver_id INT UNSIGNED NOT NULL,
@@ -57,12 +89,16 @@ CREATE TABLE IF NOT EXISTS driver_vehicle_assignments (
   route VARCHAR(120) NULL,
   assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   unassigned_at TIMESTAMP NULL,
+  active_driver_id INT UNSIGNED GENERATED ALWAYS AS (IF(unassigned_at IS NULL, driver_id, NULL)) STORED,
+  active_vehicle_id INT UNSIGNED GENERATED ALWAYS AS (IF(unassigned_at IS NULL, vehicle_id, NULL)) STORED,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_driver_vehicle_active_driver (active_driver_id),
+  UNIQUE KEY uq_driver_vehicle_active_vehicle (active_vehicle_id),
   KEY idx_driver_vehicle_active_vehicle (vehicle_id, unassigned_at),
   KEY idx_driver_vehicle_active_driver (driver_id, unassigned_at),
-  CONSTRAINT fk_driver_vehicle_driver FOREIGN KEY (driver_id) REFERENCES drivers (id) ON DELETE CASCADE,
-  CONSTRAINT fk_driver_vehicle_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles (id) ON DELETE CASCADE
+  CONSTRAINT fk_driver_vehicle_driver FOREIGN KEY (driver_id) REFERENCES drivers (id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT fk_driver_vehicle_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles (id) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS student_vehicle_assignments (
@@ -73,10 +109,90 @@ CREATE TABLE IF NOT EXISTS student_vehicle_assignments (
   notes VARCHAR(255) NULL,
   assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   unassigned_at TIMESTAMP NULL,
+  active_student_id INT UNSIGNED GENERATED ALWAYS AS (IF(unassigned_at IS NULL, student_id, NULL)) STORED,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_student_vehicle_active_student (active_student_id),
   KEY idx_student_vehicle_active_vehicle (vehicle_id, unassigned_at),
   KEY idx_student_vehicle_active_student (student_id, unassigned_at),
-  CONSTRAINT fk_student_vehicle_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE,
-  CONSTRAINT fk_student_vehicle_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles (id) ON DELETE CASCADE
+  CONSTRAINT fk_student_vehicle_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT fk_student_vehicle_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles (id) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS student_route_assignments (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id INT UNSIGNED NOT NULL,
+  route_id INT UNSIGNED NOT NULL,
+  pickup_order INT UNSIGNED NULL,
+  notes VARCHAR(255) NULL,
+  assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  unassigned_at TIMESTAMP NULL,
+  active_student_id INT UNSIGNED GENERATED ALWAYS AS (IF(unassigned_at IS NULL, student_id, NULL)) STORED,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_student_route_active_student (active_student_id),
+  KEY idx_student_route_active_route (route_id, unassigned_at),
+  KEY idx_student_route_active_student (student_id, unassigned_at),
+  CONSTRAINT fk_student_route_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+  CONSTRAINT fk_student_route_route FOREIGN KEY (route_id) REFERENCES routes (id) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS fee_dues (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id INT UNSIGNED NOT NULL,
+  route_id INT UNSIGNED NULL,
+  month VARCHAR(7) NOT NULL,
+  base_amount DECIMAL(10,2) NOT NULL,
+  discount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  fine DECIMAL(10,2) NOT NULL DEFAULT 0,
+  paid_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  balance DECIMAL(10,2) NOT NULL,
+  status ENUM('Pending', 'Partial', 'Paid', 'Overdue', 'Waived') NOT NULL DEFAULT 'Pending',
+  generated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_fee_dues_student_month (student_id, month),
+  KEY idx_fee_dues_month_status (month, status),
+  KEY idx_fee_dues_route (route_id),
+  CONSTRAINT fk_fee_dues_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE RESTRICT,
+  CONSTRAINT fk_fee_dues_route FOREIGN KEY (route_id) REFERENCES routes (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS payments (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  receipt_id VARCHAR(32) NOT NULL,
+  student_id INT UNSIGNED NULL,
+  due_id INT UNSIGNED NULL,
+  student_name VARCHAR(160) NOT NULL,
+  plan VARCHAR(80) NOT NULL,
+  amount DECIMAL(10,2) NOT NULL,
+  paid_on DATE NOT NULL,
+  method VARCHAR(40) NOT NULL,
+  status ENUM('Paid', 'Collected', 'Pending', 'Overdue') NOT NULL DEFAULT 'Pending',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_payments_receipt_id (receipt_id),
+  KEY idx_payments_student (student_id),
+  KEY idx_payments_due (due_id),
+  KEY idx_payments_paid_on (paid_on),
+  KEY idx_payments_status (status),
+  CONSTRAINT fk_payments_student FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE SET NULL,
+  CONSTRAINT fk_payments_due FOREIGN KEY (due_id) REFERENCES fee_dues (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS transport_logs (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  student_id INT UNSIGNED NOT NULL,
+  action ENUM('Pickup', 'Drop') NOT NULL,
+  recorded_at DATETIME NOT NULL,
+  latitude DECIMAL(10, 7) NOT NULL,
+  longitude DECIMAL(10, 7) NOT NULL,
+  accuracy DECIMAL(8, 2) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_transport_logs_student_date (student_id, recorded_at),
+  KEY idx_transport_logs_action (action),
+  CONSTRAINT fk_transport_logs_student
+    FOREIGN KEY (student_id) REFERENCES students(id)
+    ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

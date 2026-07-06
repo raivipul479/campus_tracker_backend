@@ -4,7 +4,7 @@ import { DriverModel } from '../models/driver.model.js';
 import { Body, enumValue, optionalString, positiveId, requiredOrExisting, validatePhone, validateText } from '../validators.js';
 
 const driverStatuses = ['On duty', 'Available', 'Off duty', 'At school'] as const;
-const docsStatuses = ['Verified', '1 expiring', '2 pending', 'Pending', 'Expired'] as const;
+const docsStatuses = ['Verified', 'ExpiringSoon', 'Pending', 'Expired'] as const;
 
 export class DriverService {
   static async list(filters: { q?: string; status?: string; docs?: string; vehicleId?: string }) {

@@ -3,8 +3,10 @@ import { config } from './config.js';
 import { pool } from './db.js';
 import { prisma } from './prisma.js';
 
-const server = app.listen(config.port, () => {
-  console.log(`Campus tracker API listening on http://localhost:${config.port}`);
+const host = process.env.HOST || '0.0.0.0';
+
+const server = app.listen(config.port, host, () => {
+  console.log(`Campus tracker API listening on http://${host}:${config.port}`);
 });
 
 const shutdown = async () => {

@@ -90,11 +90,14 @@ export function validateText(value: string, label: string, options: { min?: numb
 }
 
 export function validatePhone(value: string, label = 'phone') {
-  const digits = value.replace(/\D/g, '');
+  let digits = value.replace(/\D/g, '');
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  // This deployment is India-based. Local 10-digit numbers are stored as E.164.
+  if (digits.length === 10) digits = `91${digits}`;
   if (digits.length < 10 || digits.length > 15) {
     throw new ApiError(400, `${label} must contain 10 to 15 digits`);
   }
-  return value;
+  return `+${digits}`;
 }
 
 export function validateVehicleCode(value: string) {

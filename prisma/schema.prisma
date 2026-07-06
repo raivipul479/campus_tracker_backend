@@ -7,6 +7,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model SuperAdmin {
+  id           Int       @id @default(autoincrement()) @db.UnsignedInt
+  email        String    @unique(map: "uq_super_admins_email") @db.VarChar(190)
+  fullName     String    @map("full_name") @db.VarChar(160)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  passwordSalt String    @map("password_salt") @db.VarChar(64)
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("super_admins")
+}
+
 model Student {
   id                 Int                         @id @default(autoincrement()) @db.UnsignedInt
   serialNumber       String?                     @map("serial_number") @db.VarChar(32)
@@ -14,7 +28,7 @@ model Student {
   fullName           String                      @map("full_name") @db.VarChar(160)
   className          String                      @map("class_name") @db.VarChar(80)
   distanceKm         Decimal?                    @map("distance_km") @db.Decimal(8, 2)
-  tagNo              String?                     @map("tag_no") @db.VarChar(32)
+  tagNo              String?                     @unique(map: "uq_students_tag_no") @map("tag_no") @db.VarChar(32)
   area               String                      @db.VarChar(180)
   phone              String                      @db.VarChar(32)
   secondaryPhone     String?                     @map("secondary_phone") @db.VarChar(32)
@@ -22,10 +36,60 @@ model Student {
   updatedAt          DateTime                    @updatedAt @map("updated_at")
   vehicleAssignments StudentVehicleAssignment[]
   routeAssignments   StudentRouteAssignment[]
+  payments           Payment[]
+  feeDues            FeeDue[]
+  transportLogs      TransportLog[]
 
   @@index([fullName], map: "idx_students_name")
-  @@index([tagNo], map: "idx_students_tag_no")
+  @@index([phone], map: "idx_students_phone")
+  @@index([secondaryPhone], map: "idx_students_secondary_phone")
   @@map("students")
+}
+
+model Payment {
+  id        Int           @id @default(autoincrement()) @db.UnsignedInt
+  receiptId String        @unique(map: "uq_payments_receipt_id") @map("receipt_id") @db.VarChar(32)
+  studentId Int?          @map("student_id") @db.UnsignedInt
+  dueId     Int?          @map("due_id") @db.UnsignedInt
+  studentName String      @map("student_name") @db.VarChar(160)
+  plan      String        @db.VarChar(80)
+  amount    Decimal      @db.Decimal(10, 2)
+  paidOn    DateTime     @map("paid_on") @db.Date
+  method    String       @db.VarChar(40)
+  status    PaymentStatus @default(Pending)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  student   Student?     @relation(fields: [studentId], references: [id], onDelete: SetNull, map: "fk_payments_student")
+  due       FeeDue?      @relation(fields: [dueId], references: [id], onDelete: SetNull, map: "fk_payments_due")
+
+  @@index([studentId], map: "idx_payments_student")
+  @@index([dueId], map: "idx_payments_due")
+  @@index([paidOn], map: "idx_payments_paid_on")
+  @@index([status], map: "idx_payments_status")
+  @@map("payments")
+}
+
+model FeeDue {
+  id        Int          @id @default(autoincrement()) @db.UnsignedInt
+  studentId Int         @map("student_id") @db.UnsignedInt
+  routeId   Int?        @map("route_id") @db.UnsignedInt
+  month     String      @db.VarChar(7)
+  baseAmount Decimal    @map("base_amount") @db.Decimal(10, 2)
+  discount  Decimal     @default(0) @db.Decimal(10, 2)
+  fine      Decimal     @default(0) @db.Decimal(10, 2)
+  paidAmount Decimal    @default(0) @map("paid_amount") @db.Decimal(10, 2)
+  balance   Decimal     @db.Decimal(10, 2)
+  status    FeeDueStatus @default(Pending)
+  generatedAt DateTime  @default(now()) @map("generated_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  student   Student     @relation(fields: [studentId], references: [id], onDelete: Restrict, map: "fk_fee_dues_student")
+  route     TransportRoute? @relation(fields: [routeId], references: [id], onDelete: SetNull, map: "fk_fee_dues_route")
+  payments  Payment[]
+
+  @@unique([studentId, month], map: "uq_fee_dues_student_month")
+  @@index([month, status], map: "idx_fee_dues_month_status")
+  @@index([routeId], map: "idx_fee_dues_route")
+  @@map("fee_dues")
 }
 
 model Driver {
@@ -69,11 +133,13 @@ model TransportRoute {
   routeCode          String                   @unique(map: "uq_routes_code") @map("route_code") @db.VarChar(32)
   name               String                   @db.VarChar(120)
   description        String?                  @db.VarChar(255)
+  fee                Decimal                  @default(0) @db.Decimal(10, 2)
   vehicleId          Int?                     @map("vehicle_id") @db.UnsignedInt
   createdAt          DateTime                 @default(now()) @map("created_at")
   updatedAt          DateTime                 @updatedAt @map("updated_at")
   vehicle            Vehicle?                 @relation(fields: [vehicleId], references: [id], onDelete: SetNull, map: "fk_routes_vehicle")
   studentAssignments StudentRouteAssignment[]
+  feeDues            FeeDue[]
 
   @@index([name], map: "idx_routes_name")
   @@index([vehicleId], map: "idx_routes_vehicle")
@@ -88,8 +154,8 @@ model DriverVehicleAssignment {
   assignedAt   DateTime  @default(now()) @map("assigned_at")
   unassignedAt DateTime? @map("unassigned_at")
   createdAt    DateTime  @default(now()) @map("created_at")
-  driver       Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade, map: "fk_driver_vehicle_driver")
-  vehicle      Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade, map: "fk_driver_vehicle_vehicle")
+  driver       Driver    @relation(fields: [driverId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_driver_vehicle_driver")
+  vehicle      Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_driver_vehicle_vehicle")
 
   @@index([vehicleId, unassignedAt], map: "idx_driver_vehicle_active_vehicle")
   @@index([driverId, unassignedAt], map: "idx_driver_vehicle_active_driver")
@@ -105,8 +171,8 @@ model StudentVehicleAssignment {
   assignedAt   DateTime  @default(now()) @map("assigned_at")
   unassignedAt DateTime? @map("unassigned_at")
   createdAt    DateTime  @default(now()) @map("created_at")
-  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_student_vehicle_student")
-  vehicle      Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade, map: "fk_student_vehicle_vehicle")
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_student_vehicle_student")
+  vehicle      Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_student_vehicle_vehicle")
 
   @@index([vehicleId, unassignedAt], map: "idx_student_vehicle_active_vehicle")
   @@index([studentId, unassignedAt], map: "idx_student_vehicle_active_student")
@@ -122,12 +188,28 @@ model StudentRouteAssignment {
   assignedAt   DateTime       @default(now()) @map("assigned_at")
   unassignedAt DateTime?      @map("unassigned_at")
   createdAt    DateTime       @default(now()) @map("created_at")
-  student      Student        @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_student_route_student")
-  route        TransportRoute @relation(fields: [routeId], references: [id], onDelete: Cascade, map: "fk_student_route_route")
+  student      Student        @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_student_route_student")
+  route        TransportRoute @relation(fields: [routeId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_student_route_route")
 
   @@index([routeId, unassignedAt], map: "idx_student_route_active_route")
   @@index([studentId, unassignedAt], map: "idx_student_route_active_student")
   @@map("student_route_assignments")
+}
+
+model TransportLog {
+  id        Int              @id @default(autoincrement()) @db.UnsignedInt
+  studentId Int              @map("student_id") @db.UnsignedInt
+  action    TransportLogType
+  recordedAt DateTime       @map("recorded_at")
+  latitude  Decimal         @db.Decimal(10, 7)
+  longitude Decimal         @db.Decimal(10, 7)
+  accuracy  Decimal         @default(0) @db.Decimal(8, 2)
+  createdAt DateTime        @default(now()) @map("created_at")
+  student   Student         @relation(fields: [studentId], references: [id], onDelete: Restrict, map: "fk_transport_logs_student")
+
+  @@index([studentId, recordedAt], map: "idx_transport_logs_student_date")
+  @@index([action], map: "idx_transport_logs_action")
+  @@map("transport_logs")
 }
 
 enum DriverStatus {
@@ -139,8 +221,7 @@ enum DriverStatus {
 
 enum DocsStatus {
   Verified
-  One_expiring @map("1 expiring")
-  Two_pending  @map("2 pending")
+  ExpiringSoon
   Pending
   Expired
 }
@@ -149,4 +230,24 @@ enum VehicleStatus {
   On_route  @map("On route")
   At_school @map("At school")
   Offline
+}
+
+enum PaymentStatus {
+  Paid
+  Collected
+  Pending
+  Overdue
+}
+
+enum FeeDueStatus {
+  Pending
+  Partial
+  Paid
+  Overdue
+  Waived
+}
+
+enum TransportLogType {
+  Pickup
+  Drop
 }

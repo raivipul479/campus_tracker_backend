@@ -47,6 +47,7 @@ export class AssignmentModel {
         routeId: assignment.routeId,
         routeCode: assignment.route.routeCode,
         routeName: assignment.route.name,
+        routeFee: Number(assignment.route.fee ?? 0),
         vehicleId: assignment.route.vehicle?.id ?? null,
         vehicleCode: assignment.route.vehicle?.vehicleCode ?? null,
         pickupOrder: assignment.pickupOrder,
@@ -120,6 +121,12 @@ export class AssignmentModel {
         where: { studentId: payload.studentId, unassignedAt: null },
         data: { unassignedAt: new Date() }
       });
+      // Direct vehicle assignments are legacy history. A route assignment is
+      // the sole source of truth for the student's current vehicle.
+      await tx.studentVehicleAssignment.updateMany({
+        where: { studentId: payload.studentId, unassignedAt: null },
+        data: { unassignedAt: new Date() }
+      });
 
       return tx.studentRouteAssignment.create({
         data: {
@@ -173,6 +180,7 @@ export class AssignmentModel {
       routeId: assignment.routeId,
       routeCode: assignment.route.routeCode,
       routeName: assignment.route.name,
+      routeFee: Number(assignment.route.fee ?? 0),
       vehicleId: assignment.route.vehicle?.id ?? null,
       vehicleCode: assignment.route.vehicle?.vehicleCode ?? null,
       pickupOrder: assignment.pickupOrder,

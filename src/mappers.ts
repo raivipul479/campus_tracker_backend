@@ -30,6 +30,7 @@ export interface StudentRow {
   route_id?: number | null;
   route_code?: string | null;
   route_name?: string | null;
+  route_fee?: string | number | null;
 }
 
 export interface DriverRow {
@@ -77,6 +78,7 @@ export function mapStudent(row: StudentRow) {
     routeCode: row.route_code ?? null,
     route: row.route_code ?? '',
     routeName: row.route_name ?? '',
+    monthlyDue: Number(row.route_fee ?? 0),
     initials: initialsFor(row.full_name)
   };
 }
@@ -86,6 +88,7 @@ export interface RouteRow {
   route_code: string;
   name: string;
   description: string | null;
+  fee: string | number;
   vehicle_id?: number | null;
   vehicle_code?: string | null;
   student_count?: number | string;
@@ -98,6 +101,7 @@ export function mapRoute(row: RouteRow) {
     code: row.route_code,
     name: row.name,
     description: row.description ?? '',
+    fee: Number(row.fee ?? 0),
     vehicleId: row.vehicle_id ?? null,
     vehicle: row.vehicle_code ?? 'Not assigned',
     students: Number(row.student_count ?? 0)

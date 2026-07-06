@@ -5,6 +5,7 @@ export interface RoutePayload {
   code: string;
   name: string;
   description: string | null;
+  fee: number;
   vehicleIdentifier: unknown;
 }
 
@@ -61,6 +62,7 @@ export class RouteModel {
         routeCode: payload.code,
         name: payload.name,
         description: payload.description,
+        fee: payload.fee,
         vehicleId
       },
       include: routeInclude()
@@ -77,6 +79,7 @@ export class RouteModel {
         routeCode: payload.code,
         name: payload.name,
         description: payload.description,
+        fee: payload.fee,
         vehicleId
       },
       include: routeInclude()
@@ -111,6 +114,7 @@ function mapRouteRecord(route: any): RouteRow {
     route_code: route.routeCode,
     name: route.name,
     description: route.description,
+    fee: route.fee,
     vehicle_id: route.vehicle?.id ?? null,
     vehicle_code: route.vehicle?.vehicleCode ?? null,
     student_count: route.studentAssignments?.length ?? 0

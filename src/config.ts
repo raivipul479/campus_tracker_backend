@@ -16,6 +16,13 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: numberFromEnv('PORT', 4000),
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173,http://127.0.0.1:5173',
+  auth: {
+    tokenSecret: process.env.AUTH_TOKEN_SECRET ?? 'change-this-secret-before-production',
+    tokenTtlSeconds: numberFromEnv('AUTH_TOKEN_TTL_SECONDS', 60 * 60 * 8),
+    defaultSuperAdminEmail: process.env.SUPER_ADMIN_EMAIL ?? 'admin@campus.local',
+    defaultSuperAdminPassword: process.env.SUPER_ADMIN_PASSWORD ?? 'Admin@12345',
+    defaultSuperAdminName: process.env.SUPER_ADMIN_NAME ?? 'Super Admin'
+  },
   db: {
     host: process.env.DB_HOST ?? '127.0.0.1',
     port: numberFromEnv('DB_PORT', 3306),

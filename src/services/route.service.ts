@@ -1,7 +1,7 @@
 import { ApiError } from '../errors.js';
 import { mapRoute, RouteRow } from '../mappers.js';
 import { RouteModel } from '../models/route.model.js';
-import { Body, optionalString, positiveId, requiredOrExisting, validateText } from '../validators.js';
+import { Body, optionalBoundedNumber, optionalString, positiveId, requiredOrExisting, validateText } from '../validators.js';
 
 export class RouteService {
   static async list(filters: { q?: string; vehicleId?: string; assigned?: string }) {
@@ -45,7 +45,8 @@ function routePayload(data: Body, existing?: RouteRow) {
   const name = validateText(requiredOrExisting(data, ['name'], 'route name', existing?.name), 'route name', { min: 2, max: 120 });
   const description = optionalString(data, ['description']) ?? existing?.description ?? null;
   if (description) validateText(description, 'description', { max: 255 });
+  const fee = optionalBoundedNumber(data, ['fee', 'routeFee'], 'route fee', { min: 0, max: 99999999.99 }) ?? Number(existing?.fee ?? 0);
   const vehicleIdentifier = data.vehicleId ?? data.vehicleCode ?? data.vehicle ?? existing?.vehicle_id ?? null;
 
-  return { code, name, description, vehicleIdentifier };
+  return { code, name, description, fee, vehicleIdentifier };
 }

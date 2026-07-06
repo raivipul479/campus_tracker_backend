@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { StudentRow } from '../mappers.js';
 import { prisma } from '../prisma.js';
 
@@ -132,7 +133,10 @@ export class StudentModel {
     try {
       await prisma.student.delete({ where: { id } });
       return { affectedRows: 1 };
-    } catch {
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+        return { affectedRows: 0, conflict: true };
+      }
       return { affectedRows: 0 };
     }
   }
@@ -167,6 +171,7 @@ function mapStudentRecord(student: any): StudentRow {
     vehicle_code: vehicle?.vehicleCode ?? null,
     route_id: route?.id ?? null,
     route_code: route?.routeCode ?? null,
-    route_name: route?.name ?? null
+    route_name: route?.name ?? null,
+    route_fee: route?.fee ?? 0
   };
 }

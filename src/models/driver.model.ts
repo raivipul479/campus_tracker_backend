@@ -126,8 +126,7 @@ export function fromDriverStatus(status: DriverStatus | string) {
 export function toDocsStatus(status: string): DocsStatus {
   const map: Record<string, DocsStatus> = {
     Verified: DocsStatus.Verified,
-    '1 expiring': DocsStatus.One_expiring,
-    '2 pending': DocsStatus.Two_pending,
+    ExpiringSoon: DocsStatus.ExpiringSoon,
     Pending: DocsStatus.Pending,
     Expired: DocsStatus.Expired
   };
@@ -137,8 +136,7 @@ export function toDocsStatus(status: string): DocsStatus {
 function fromDocsStatus(status: DocsStatus | string) {
   const map: Record<string, string> = {
     Verified: 'Verified',
-    One_expiring: '1 expiring',
-    Two_pending: '2 pending',
+    ExpiringSoon: 'ExpiringSoon',
     Pending: 'Pending',
     Expired: 'Expired'
   };

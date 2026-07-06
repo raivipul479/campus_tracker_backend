@@ -44,6 +44,9 @@ export class StudentService {
   static async delete(idValue: unknown) {
     const id = positiveId(idValue, 'student id');
     const result = await StudentModel.delete(id);
+    if ('conflict' in result && result.conflict) {
+      throw new ApiError(409, 'Student has retained billing or transport history and cannot be hard-deleted');
+    }
     if (!result.affectedRows) throw new ApiError(404, 'Student not found');
   }
 }
@@ -56,11 +59,10 @@ function studentPayload(data: Body, existing?: StudentRow) {
   const tagNo = optionalString(data, ['tagNo', 'tag']) ?? existing?.tag_no ?? null;
   const area = validateText(requiredOrExisting(data, ['area'], 'area', existing?.area), 'area', { min: 2, max: 180 });
   const phone = validateStudentPhone(requiredOrExisting(data, ['phone'], 'phone', existing?.phone), 'phone');
-  const secondaryPhone = optionalString(data, ['secondaryPhone', 'secondary_phone']) ?? existing?.secondary_phone ?? null;
+  const secondaryPhoneInput = optionalString(data, ['secondaryPhone', 'secondary_phone']) ?? existing?.secondary_phone ?? null;
+  const secondaryPhone = secondaryPhoneInput ? validateStudentPhone(secondaryPhoneInput, 'secondary phone') : null;
   if (serialNumber) validateText(serialNumber, 'serial number', { max: 32 });
   if (tagNo) validateText(tagNo, 'tag number', { max: 32 });
-  if (secondaryPhone) validateStudentPhone(secondaryPhone, 'secondary phone');
-
   return {
     serialNumber,
     registrationNumber,
@@ -75,8 +77,5 @@ function studentPayload(data: Body, existing?: StudentRow) {
 }
 
 function validateStudentPhone(value: string, label: string) {
-  if (!/^\d{10}$/.test(value)) {
-    throw new ApiError(400, `${label} must be exactly 10 digits`);
-  }
-  return value;
+  return validatePhone(value, label);
 }
