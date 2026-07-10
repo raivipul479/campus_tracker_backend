@@ -149,6 +149,79 @@ export class AssignmentModel {
     return { affectedRows: result.count };
   }
 
+  static async driverHistory(driverId: number) {
+    const rows = await prisma.driverVehicleAssignment.findMany({
+      where: { driverId },
+      include: { vehicle: true },
+      orderBy: { assignedAt: 'desc' }
+    });
+    return rows.map(assignment => ({
+      id: assignment.id,
+      vehicleId: assignment.vehicleId,
+      vehicleCode: assignment.vehicle.vehicleCode,
+      route: assignment.route,
+      assignedAt: assignment.assignedAt,
+      unassignedAt: assignment.unassignedAt
+    }));
+  }
+
+  static async vehicleHistory(vehicleId: number) {
+    const rows = await prisma.driverVehicleAssignment.findMany({
+      where: { vehicleId },
+      include: { driver: true },
+      orderBy: { assignedAt: 'desc' }
+    });
+    return rows.map(assignment => ({
+      id: assignment.id,
+      driverId: assignment.driverId,
+      driverName: assignment.driver.fullName,
+      route: assignment.route,
+      assignedAt: assignment.assignedAt,
+      unassignedAt: assignment.unassignedAt
+    }));
+  }
+
+  static async studentHistory(studentId: number) {
+    const [routeRows, legacyVehicleRows] = await Promise.all([
+      prisma.studentRouteAssignment.findMany({
+        where: { studentId },
+        include: { route: { include: { vehicle: true } } },
+        orderBy: { assignedAt: 'desc' }
+      }),
+      prisma.studentVehicleAssignment.findMany({
+        where: { studentId },
+        include: { vehicle: true },
+        orderBy: { assignedAt: 'desc' }
+      })
+    ]);
+
+    const routeHistory = routeRows.map(assignment => ({
+      id: `route-${assignment.id}`,
+      kind: 'route' as const,
+      routeId: assignment.routeId,
+      routeCode: assignment.route.routeCode,
+      routeName: assignment.route.name,
+      vehicleCode: assignment.route.vehicle?.vehicleCode ?? null,
+      pickupOrder: assignment.pickupOrder,
+      assignedAt: assignment.assignedAt,
+      unassignedAt: assignment.unassignedAt
+    }));
+
+    const legacyHistory = legacyVehicleRows.map(assignment => ({
+      id: `vehicle-${assignment.id}`,
+      kind: 'vehicle' as const,
+      vehicleId: assignment.vehicleId,
+      vehicleCode: assignment.vehicle.vehicleCode,
+      pickupOrder: assignment.pickupOrder,
+      assignedAt: assignment.assignedAt,
+      unassignedAt: assignment.unassignedAt
+    }));
+
+    return [...routeHistory, ...legacyHistory].sort(
+      (a, b) => b.assignedAt.getTime() - a.assignedAt.getTime()
+    );
+  }
+
   private static async findDriverAssignmentById(assignmentId: number) {
     const assignment = await prisma.driverVehicleAssignment.findUnique({
       where: { id: assignmentId },

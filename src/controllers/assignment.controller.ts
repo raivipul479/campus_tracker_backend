@@ -29,4 +29,16 @@ export class AssignmentController {
     await AssignmentService.unassignStudent(req.params.assignmentId);
     res.status(204).send();
   }
+
+  static async driverHistory(req: Request, res: Response) {
+    res.json(await AssignmentService.driverHistory(req.params.driverId));
+  }
+
+  static async vehicleHistory(req: Request, res: Response) {
+    res.json(await AssignmentService.vehicleHistory(req.params.vehicleId));
+  }
+
+  static async studentHistory(req: Request, res: Response) {
+    res.json(await AssignmentService.studentHistory(req.params.studentId));
+  }
 }

@@ -52,4 +52,16 @@ export class AssignmentService {
     const result = await AssignmentModel.unassignStudent(assignmentId);
     if (!result.affectedRows) throw new ApiError(404, 'Active student assignment not found');
   }
+
+  static async driverHistory(driverIdValue: unknown) {
+    return AssignmentModel.driverHistory(positiveId(driverIdValue, 'driver id'));
+  }
+
+  static async vehicleHistory(vehicleIdValue: unknown) {
+    return AssignmentModel.vehicleHistory(positiveId(vehicleIdValue, 'vehicle id'));
+  }
+
+  static async studentHistory(studentIdValue: unknown) {
+    return AssignmentModel.studentHistory(positiveId(studentIdValue, 'student id'));
+  }
 }

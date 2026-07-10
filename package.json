@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "cross-env NODE_ENV=development tsx watch src/server.ts",
+    "start:prod": "cross-env NODE_ENV=production node dist/server.js",
     "build": "prisma generate && tsc",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
@@ -28,6 +29,7 @@
     "@types/express": "^5.0.0",
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.10.2",
+    "cross-env": "^7.0.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }
