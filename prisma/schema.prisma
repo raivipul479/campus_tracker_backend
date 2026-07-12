@@ -118,6 +118,14 @@ model Vehicle {
   speedKmh           Decimal                     @default(0) @map("speed_kmh") @db.Decimal(8, 2)
   mapX               Decimal                     @default(50) @map("map_x") @db.Decimal(5, 2)
   mapY               Decimal                     @default(50) @map("map_y") @db.Decimal(5, 2)
+  vehicleType        VehicleType                 @default(Bus) @map("vehicle_type")
+  fuelType           FuelType                    @default(Diesel) @map("fuel_type")
+  seatingCapacity    Int?                        @map("seating_capacity") @db.UnsignedSmallInt
+  chassisNumber      String?                     @unique(map: "uq_vehicles_chassis_number") @map("chassis_number") @db.VarChar(64)
+  insuranceExpiry    DateTime?                   @map("insurance_expiry") @db.Date
+  fitnessExpiry      DateTime?                   @map("fitness_expiry") @db.Date
+  pucExpiry          DateTime?                   @map("puc_expiry") @db.Date
+  permitExpiry       DateTime?                   @map("permit_expiry") @db.Date
   createdAt          DateTime                    @default(now()) @map("created_at")
   updatedAt          DateTime                    @updatedAt @map("updated_at")
   driverAssignments  DriverVehicleAssignment[]
@@ -230,6 +238,19 @@ enum VehicleStatus {
   On_route  @map("On route")
   At_school @map("At school")
   Offline
+}
+
+enum VehicleType {
+  Bus
+  Van
+  Mini_Bus @map("Mini Bus")
+}
+
+enum FuelType {
+  Diesel
+  Petrol
+  CNG
+  Electric
 }
 
 enum PaymentStatus {

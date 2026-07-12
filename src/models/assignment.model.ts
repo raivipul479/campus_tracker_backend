@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../prisma.js';
 import { toDriverStatus } from './driver.model.js';
 
@@ -113,6 +114,28 @@ export class AssignmentModel {
   }
 
   static async assignStudent(payload: AssignStudentPayload) {
+    const assignmentId = await AssignmentModel.assignStudentOnce(payload);
+    return this.findStudentAssignmentById(assignmentId);
+  }
+
+  static async assignStudentsBulk(payloads: AssignStudentPayload[]) {
+    const assigned: NonNullable<Awaited<ReturnType<typeof AssignmentModel.findStudentAssignmentById>>>[] = [];
+    const failed: { studentId: number; error: string }[] = [];
+
+    for (const payload of payloads) {
+      try {
+        const assignmentId = await AssignmentModel.assignStudentOnce(payload);
+        const assignment = await this.findStudentAssignmentById(assignmentId);
+        if (assignment) assigned.push(assignment);
+      } catch (error) {
+        failed.push({ studentId: payload.studentId, error: describeAssignmentError(error) });
+      }
+    }
+
+    return { assigned, failed };
+  }
+
+  private static async assignStudentOnce(payload: AssignStudentPayload) {
     const assignment = await prisma.$transaction(async tx => {
       const route = await resolveRoute(payload.routeIdentifier, tx);
       await tx.student.findUniqueOrThrow({ where: { id: payload.studentId }, select: { id: true } });
@@ -138,7 +161,7 @@ export class AssignmentModel {
       });
     });
 
-    return this.findStudentAssignmentById(assignment.id);
+    return assignment.id;
   }
 
   static async unassignStudent(assignmentId: number) {
@@ -277,4 +300,11 @@ async function resolveRoute(identifier: unknown, tx: any) {
     return tx.transportRoute.findUniqueOrThrow({ where: { id: Number(value) }, select: { id: true } });
   }
   return tx.transportRoute.findUniqueOrThrow({ where: { routeCode: value }, select: { id: true } });
+}
+
+function describeAssignmentError(error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+    return 'Student or route not found';
+  }
+  return error instanceof Error ? error.message : 'Assignment failed';
 }

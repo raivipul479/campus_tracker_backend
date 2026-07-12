@@ -1,4 +1,4 @@
-import { VehicleStatus } from '@prisma/client';
+import { FuelType, VehicleStatus, VehicleType } from '@prisma/client';
 import { ApiError } from '../errors.js';
 import { StudentRow, VehicleRow } from '../mappers.js';
 import { prisma } from '../prisma.js';
@@ -11,6 +11,14 @@ export interface VehiclePayload {
   speed: number;
   mapX: number;
   mapY: number;
+  vehicleType: string;
+  fuelType: string;
+  seatingCapacity: number | null;
+  chassisNumber: string | null;
+  insuranceExpiry: Date | null;
+  fitnessExpiry: Date | null;
+  pucExpiry: Date | null;
+  permitExpiry: Date | null;
 }
 
 export class VehicleModel {
@@ -93,7 +101,15 @@ export class VehicleModel {
         status: toVehicleStatus(payload.status),
         speedKmh: payload.speed,
         mapX: payload.mapX,
-        mapY: payload.mapY
+        mapY: payload.mapY,
+        vehicleType: toVehicleType(payload.vehicleType),
+        fuelType: toFuelType(payload.fuelType),
+        seatingCapacity: payload.seatingCapacity,
+        chassisNumber: payload.chassisNumber,
+        insuranceExpiry: payload.insuranceExpiry,
+        fitnessExpiry: payload.fitnessExpiry,
+        pucExpiry: payload.pucExpiry,
+        permitExpiry: payload.permitExpiry
       },
       include: vehicleInclude()
     });
@@ -111,7 +127,15 @@ export class VehicleModel {
         status: toVehicleStatus(payload.status),
         speedKmh: payload.speed,
         mapX: payload.mapX,
-        mapY: payload.mapY
+        mapY: payload.mapY,
+        vehicleType: toVehicleType(payload.vehicleType),
+        fuelType: toFuelType(payload.fuelType),
+        seatingCapacity: payload.seatingCapacity,
+        chassisNumber: payload.chassisNumber,
+        insuranceExpiry: payload.insuranceExpiry,
+        fitnessExpiry: payload.fitnessExpiry,
+        pucExpiry: payload.pucExpiry,
+        permitExpiry: payload.permitExpiry
       },
       include: vehicleInclude()
     });
@@ -147,6 +171,34 @@ export function fromVehicleStatus(status: VehicleStatus | string) {
   return map[String(status)] ?? String(status);
 }
 
+export function toVehicleType(type: string): VehicleType {
+  const map: Record<string, VehicleType> = {
+    Bus: VehicleType.Bus,
+    Van: VehicleType.Van,
+    'Mini Bus': VehicleType.Mini_Bus
+  };
+  return map[type] ?? VehicleType.Bus;
+}
+
+export function fromVehicleType(type: VehicleType | string) {
+  const map: Record<string, string> = {
+    Bus: 'Bus',
+    Van: 'Van',
+    Mini_Bus: 'Mini Bus'
+  };
+  return map[String(type)] ?? String(type);
+}
+
+export function toFuelType(type: string): FuelType {
+  const map: Record<string, FuelType> = {
+    Diesel: FuelType.Diesel,
+    Petrol: FuelType.Petrol,
+    CNG: FuelType.CNG,
+    Electric: FuelType.Electric
+  };
+  return map[type] ?? FuelType.Diesel;
+}
+
 function vehicleInclude() {
   return {
     driverAssignments: {
@@ -180,6 +232,14 @@ function mapVehicleRecord(vehicle: any): VehicleRow {
     speed_kmh: Number(vehicle.speedKmh),
     map_x: Number(vehicle.mapX),
     map_y: Number(vehicle.mapY),
+    vehicle_type: fromVehicleType(vehicle.vehicleType),
+    fuel_type: vehicle.fuelType,
+    seating_capacity: vehicle.seatingCapacity ?? null,
+    chassis_number: vehicle.chassisNumber ?? null,
+    insurance_expiry: vehicle.insuranceExpiry ?? null,
+    fitness_expiry: vehicle.fitnessExpiry ?? null,
+    puc_expiry: vehicle.pucExpiry ?? null,
+    permit_expiry: vehicle.permitExpiry ?? null,
     driver_id: driverAssignment?.driver.id ?? null,
     driver_name: driverAssignment?.driver.fullName ?? null,
     student_count: vehicle.routes?.reduce((sum: number, route: any) => sum + (route.studentAssignments?.length ?? 0), 0) ?? vehicle.studentAssignments?.length ?? 0

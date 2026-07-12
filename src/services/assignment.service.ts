@@ -33,18 +33,21 @@ export class AssignmentService {
   }
 
   static async assignStudent(data: Body) {
-    const notes = optionalString(data, ['notes']);
-    const routeIdentifier = data.routeId ?? data.routeCode ?? data.route;
-    if (routeIdentifier === undefined || routeIdentifier === null || routeIdentifier === '') {
-      throw new ApiError(400, 'routeId is required');
+    return AssignmentModel.assignStudent(parseStudentAssignment(data));
+  }
+
+  static async assignStudentsBulk(data: Body) {
+    const items = data.assignments;
+    if (!Array.isArray(items) || !items.length) {
+      throw new ApiError(400, 'assignments must be a non-empty array');
     }
-    if (notes) validateText(notes, 'notes', { max: 255 });
-    return AssignmentModel.assignStudent({
-      studentId: positiveId(data.studentId, 'studentId'),
-      routeIdentifier,
-      pickupOrder: optionalBoundedNumber(data, ['pickupOrder', 'pickup_order'], 'pickup order', { min: 1, max: 500, integer: true }),
-      notes
+    const payloads = items.map((item, index) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new ApiError(400, `assignments[${index}] must be an object`);
+      }
+      return parseStudentAssignment(item as Body, `assignments[${index}].`);
     });
+    return AssignmentModel.assignStudentsBulk(payloads);
   }
 
   static async unassignStudent(assignmentIdValue: unknown) {
@@ -64,4 +67,19 @@ export class AssignmentService {
   static async studentHistory(studentIdValue: unknown) {
     return AssignmentModel.studentHistory(positiveId(studentIdValue, 'student id'));
   }
+}
+
+function parseStudentAssignment(data: Body, labelPrefix = '') {
+  const notes = optionalString(data, ['notes']);
+  const routeIdentifier = data.routeId ?? data.routeCode ?? data.route;
+  if (routeIdentifier === undefined || routeIdentifier === null || routeIdentifier === '') {
+    throw new ApiError(400, `${labelPrefix}routeId is required`);
+  }
+  if (notes) validateText(notes, 'notes', { max: 255 });
+  return {
+    studentId: positiveId(data.studentId, `${labelPrefix}studentId`),
+    routeIdentifier,
+    pickupOrder: optionalBoundedNumber(data, ['pickupOrder', 'pickup_order'], 'pickup order', { min: 1, max: 500, integer: true }),
+    notes
+  };
 }

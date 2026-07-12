@@ -48,10 +48,18 @@ Stores registered school vehicles.
 
 Important fields:
 
-- `vehicle_code` and `registration_number` are unique.
+- `vehicle_code`, `registration_number`, and `chassis_number` are unique.
+  `chassis_number` is nullable, so multiple vehicles may have it unset.
 - `route` is a display/operational route label.
 - `status` and `speed_kmh` support fleet tracking. `map_x`/`map_y` are
   dashboard screen-space percentages; they are not GPS coordinates.
+- `vehicle_type` (Bus, Van, Mini Bus) and `fuel_type` (Diesel, Petrol, CNG,
+  Electric) default to `Bus`/`Diesel` for existing rows.
+- `seating_capacity` and the four compliance dates (`insurance_expiry`,
+  `fitness_expiry`, `puc_expiry`, `permit_expiry`) are nullable at the
+  database level for backward compatibility with vehicles created before
+  these fields existed; the admin UI marks them required when adding or
+  editing a vehicle going forward.
 - Driver and student assignments are stored in relationship tables.
 
 ### `routes`

@@ -58,11 +58,20 @@ CREATE TABLE IF NOT EXISTS vehicles (
   speed_kmh DECIMAL(8,2) NOT NULL DEFAULT 0,
   map_x DECIMAL(5,2) NOT NULL DEFAULT 50,
   map_y DECIMAL(5,2) NOT NULL DEFAULT 50,
+  vehicle_type ENUM('Bus', 'Van', 'Mini Bus') NOT NULL DEFAULT 'Bus',
+  fuel_type ENUM('Diesel', 'Petrol', 'CNG', 'Electric') NOT NULL DEFAULT 'Diesel',
+  seating_capacity SMALLINT UNSIGNED NULL,
+  chassis_number VARCHAR(64) NULL,
+  insurance_expiry DATE NULL,
+  fitness_expiry DATE NULL,
+  puc_expiry DATE NULL,
+  permit_expiry DATE NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_vehicles_code (vehicle_code),
   UNIQUE KEY uq_vehicles_registration_number (registration_number),
+  UNIQUE KEY uq_vehicles_chassis_number (chassis_number),
   KEY idx_vehicles_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

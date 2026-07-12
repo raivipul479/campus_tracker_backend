@@ -25,6 +25,10 @@ export class AssignmentController {
     res.status(201).json(await AssignmentService.assignStudent(body(req.body)));
   }
 
+  static async assignStudentsBulk(req: Request, res: Response) {
+    res.status(201).json(await AssignmentService.assignStudentsBulk(body(req.body)));
+  }
+
   static async unassignStudent(req: Request, res: Response) {
     await AssignmentService.unassignStudent(req.params.assignmentId);
     res.status(204).send();

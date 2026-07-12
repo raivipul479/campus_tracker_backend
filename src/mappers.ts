@@ -54,6 +54,14 @@ export interface VehicleRow {
   speed_kmh: string | number;
   map_x: string | number;
   map_y: string | number;
+  vehicle_type: string;
+  fuel_type: string;
+  seating_capacity: number | null;
+  chassis_number: string | null;
+  insurance_expiry: Date | string | null;
+  fitness_expiry: Date | string | null;
+  puc_expiry: Date | string | null;
+  permit_expiry: Date | string | null;
   driver_name?: string | null;
   driver_id?: number | null;
   student_count?: number | string;
@@ -124,6 +132,12 @@ export function mapDriver(row: DriverRow) {
   };
 }
 
+function dateOnly(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
 export function mapVehicle(row: VehicleRow) {
   return {
     vehicleId: row.id,
@@ -138,6 +152,14 @@ export function mapVehicle(row: VehicleRow) {
     students: Number(row.student_count ?? 0),
     tone: toneForVehicle(row.status),
     x: Number(row.map_x),
-    y: Number(row.map_y)
+    y: Number(row.map_y),
+    vehicleType: row.vehicle_type,
+    fuelType: row.fuel_type,
+    seatingCapacity: row.seating_capacity ?? null,
+    chassisNumber: row.chassis_number ?? null,
+    insuranceExpiry: dateOnly(row.insurance_expiry),
+    fitnessExpiry: dateOnly(row.fitness_expiry),
+    pucExpiry: dateOnly(row.puc_expiry),
+    permitExpiry: dateOnly(row.permit_expiry)
   };
 }
