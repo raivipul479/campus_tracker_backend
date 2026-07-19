@@ -6,7 +6,7 @@ import { Body, optionalBoundedNumber, optionalString, positiveId } from '../vali
 const statusValues = new Set(['Pending', 'Partial', 'Paid', 'Overdue', 'Waived']);
 
 export class FeeDueService {
-  static async list(filters: { month?: string; status?: string; studentId?: string; q?: string }) {
+  static async list(filters: { month?: string; status?: string; studentId?: string; studentIds?: number[]; q?: string }) {
     const where = dueWhere(filters);
     const rows = await prisma.feeDue.findMany({
       where,
@@ -19,8 +19,13 @@ export class FeeDueService {
   static async generate(data: Body) {
     const month = monthValue(optionalString(data, ['month']) || currentMonth());
     const overwrite = data.overwrite === true || data.overwrite === 'true';
+    const studentIdRaw = data.studentId;
+    const studentId = studentIdRaw === undefined || studentIdRaw === null || studentIdRaw === ''
+      ? null
+      : positiveId(studentIdRaw, 'studentId');
 
     const students = await prisma.student.findMany({
+      where: studentId ? { id: studentId } : undefined,
       include: {
         routeAssignments: {
           where: { unassignedAt: null },
@@ -30,6 +35,7 @@ export class FeeDueService {
       },
       orderBy: { fullName: 'asc' }
     });
+    if (studentId && students.length === 0) throw new ApiError(404, 'Student not found');
 
     let created = 0;
     let updated = 0;
@@ -89,7 +95,7 @@ export class FeeDueService {
       created,
       updated,
       skipped,
-      dues: await FeeDueService.list({ month })
+      dues: await FeeDueService.list(studentId ? { month, studentId: String(studentId) } : { month })
     };
   }
 
@@ -132,8 +138,15 @@ export class FeeDueService {
 
   static async report(filters: { from?: string; to?: string; status?: string; studentId?: string }) {
     const dueWhereInput: Prisma.FeeDueWhereInput = {};
-    if (filters.studentId) dueWhereInput.studentId = Number(filters.studentId);
-    if (filters.status && filters.status !== 'all') dueWhereInput.status = filters.status as FeeDueStatus;
+    if (filters.studentId) {
+      const studentId = Number(filters.studentId);
+      if (!Number.isInteger(studentId) || studentId <= 0) throw new ApiError(400, 'studentId filter must be a positive integer');
+      dueWhereInput.studentId = studentId;
+    }
+    if (filters.status && filters.status !== 'all') {
+      if (!statusValues.has(filters.status)) throw new ApiError(400, 'Unsupported due status');
+      dueWhereInput.status = filters.status as FeeDueStatus;
+    }
     if (filters.from || filters.to) {
       dueWhereInput.generatedAt = {};
       if (filters.from) dueWhereInput.generatedAt.gte = parseDate(filters.from, 'from date');
@@ -181,14 +194,21 @@ export async function reconcileDuePayments(tx: Prisma.TransactionClient, dueId: 
   });
 }
 
-function dueWhere(filters: { month?: string; status?: string; studentId?: string; q?: string }) {
+function dueWhere(filters: { month?: string; status?: string; studentId?: string; studentIds?: number[]; q?: string }) {
   const where: Prisma.FeeDueWhereInput = {};
   if (filters.month) where.month = monthValue(filters.month);
   if (filters.status && filters.status !== 'all') {
     if (!statusValues.has(filters.status)) throw new ApiError(400, 'Unsupported due status');
     where.status = filters.status as FeeDueStatus;
   }
-  if (filters.studentId) where.studentId = Number(filters.studentId);
+  if (filters.studentId) {
+    const studentId = Number(filters.studentId);
+    if (!Number.isInteger(studentId) || studentId <= 0) throw new ApiError(400, 'studentId filter must be a positive integer');
+    where.studentId = studentId;
+  }
+  if (filters.studentIds) {
+    where.studentId = { in: filters.studentIds };
+  }
   if (filters.q) {
     where.OR = [
       { student: { fullName: { contains: filters.q } } },

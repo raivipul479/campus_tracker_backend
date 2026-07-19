@@ -1,4 +1,4 @@
-import { DocsStatus, DriverStatus } from '@prisma/client';
+import { DocsStatus, DriverStatus, Prisma } from '@prisma/client';
 import { DriverRow } from '../mappers.js';
 import { prisma } from '../prisma.js';
 
@@ -12,7 +12,7 @@ export interface DriverPayload {
 }
 
 export class DriverModel {
-  static async findAll(filters: { q?: string; status?: string; docs?: string; vehicleId?: string }) {
+  static async findAll(filters: { q?: string; status?: string; docs?: string; vehicleId?: string; phone?: string }) {
     const drivers = await prisma.driver.findMany({
       where: {
         ...(filters.q
@@ -25,6 +25,7 @@ export class DriverModel {
             ]
           }
           : {}),
+        ...(filters.phone ? { phone: filters.phone } : {}),
         ...(filters.status ? { status: toDriverStatus(filters.status) } : {}),
         ...(filters.docs ? { docsStatus: toDocsStatus(filters.docs) } : {}),
         ...(filters.vehicleId
@@ -97,7 +98,10 @@ export class DriverModel {
     try {
       await prisma.driver.delete({ where: { id } });
       return { affectedRows: 1 };
-    } catch {
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+        return { affectedRows: 0, conflict: true };
+      }
       return { affectedRows: 0 };
     }
   }

@@ -1,3 +1,5 @@
+import { Prisma } from '@prisma/client';
+import { ApiError } from '../errors.js';
 import { prisma } from '../prisma.js';
 import { RouteRow } from '../mappers.js';
 
@@ -92,7 +94,10 @@ export class RouteModel {
     try {
       await prisma.transportRoute.delete({ where: { id } });
       return { affectedRows: 1 };
-    } catch {
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+        return { affectedRows: 0, conflict: true };
+      }
       return { affectedRows: 0 };
     }
   }
@@ -127,5 +132,6 @@ async function resolveVehicleId(identifier: unknown) {
   const vehicle = /^\d+$/.test(value)
     ? await prisma.vehicle.findUnique({ where: { id: Number(value) }, select: { id: true } })
     : await prisma.vehicle.findUnique({ where: { vehicleCode: value }, select: { id: true } });
-  return vehicle?.id ?? null;
+  if (!vehicle) throw new ApiError(404, `Vehicle "${value}" not found`);
+  return vehicle.id;
 }

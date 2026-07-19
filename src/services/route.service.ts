@@ -32,6 +32,9 @@ export class RouteService {
   static async delete(idValue: unknown) {
     const id = positiveId(idValue, 'route id');
     const result = await RouteModel.delete(id);
+    if ('conflict' in result && result.conflict) {
+      throw new ApiError(409, 'Route has student assignment or fee due history and cannot be hard-deleted');
+    }
     if (!result.affectedRows) throw new ApiError(404, 'Route not found');
   }
 }

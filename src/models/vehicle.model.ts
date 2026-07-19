@@ -1,4 +1,4 @@
-import { FuelType, VehicleStatus, VehicleType } from '@prisma/client';
+import { FuelType, Prisma, VehicleStatus, VehicleType } from '@prisma/client';
 import { ApiError } from '../errors.js';
 import { StudentRow, VehicleRow } from '../mappers.js';
 import { prisma } from '../prisma.js';
@@ -147,7 +147,10 @@ export class VehicleModel {
     try {
       await prisma.vehicle.delete({ where: { id } });
       return { affectedRows: 1 };
-    } catch {
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+        return { affectedRows: 0, conflict: true };
+      }
       return { affectedRows: 0 };
     }
   }

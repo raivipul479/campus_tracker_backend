@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import mysql from 'mysql2/promise';
 import { config } from '../config.js';
+import { SuperAdminModel } from '../models/super-admin.model.js';
 
 async function runSqlFile(connection: mysql.Connection, filePath: string) {
   const sql = await fs.readFile(filePath, 'utf8');
@@ -33,6 +34,8 @@ async function main() {
   await runSqlFile(appConnection, path.join(databaseDir, 'schema.sql'));
   await runSqlFile(appConnection, path.join(databaseDir, 'seed.sql'));
   await appConnection.end();
+
+  await SuperAdminModel.ensureDefaultAdmin();
 
   console.log(`Database ${config.db.database} is ready.`);
 }

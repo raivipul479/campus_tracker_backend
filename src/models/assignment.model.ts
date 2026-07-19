@@ -98,19 +98,37 @@ export class AssignmentModel {
   }
 
   static async unassignDriver(assignmentId: number) {
-    const result = await prisma.driverVehicleAssignment.updateMany({
-      where: { id: assignmentId, unassignedAt: null },
-      data: { unassignedAt: new Date() }
+    return prisma.$transaction(async tx => {
+      const assignment = await tx.driverVehicleAssignment.findUnique({ where: { id: assignmentId } });
+      if (!assignment || assignment.unassignedAt !== null) {
+        return { affectedRows: 0 };
+      }
+      await tx.driverVehicleAssignment.update({
+        where: { id: assignmentId },
+        data: { unassignedAt: new Date() }
+      });
+      await tx.driver.update({
+        where: { id: assignment.driverId },
+        data: { status: toDriverStatus('Available'), route: null }
+      });
+      return { affectedRows: 1 };
     });
-    return { affectedRows: result.count };
   }
 
   static async unassignDriverByDriverId(driverId: number) {
-    const result = await prisma.driverVehicleAssignment.updateMany({
-      where: { driverId, unassignedAt: null },
-      data: { unassignedAt: new Date() }
+    return prisma.$transaction(async tx => {
+      const result = await tx.driverVehicleAssignment.updateMany({
+        where: { driverId, unassignedAt: null },
+        data: { unassignedAt: new Date() }
+      });
+      if (result.count > 0) {
+        await tx.driver.update({
+          where: { id: driverId },
+          data: { status: toDriverStatus('Available'), route: null }
+        });
+      }
+      return { affectedRows: result.count };
     });
-    return { affectedRows: result.count };
   }
 
   static async assignStudent(payload: AssignStudentPayload) {
@@ -121,14 +139,25 @@ export class AssignmentModel {
   static async assignStudentsBulk(payloads: AssignStudentPayload[]) {
     const assigned: NonNullable<Awaited<ReturnType<typeof AssignmentModel.findStudentAssignmentById>>>[] = [];
     const failed: { studentId: number; error: string }[] = [];
+    const concurrency = 8;
 
-    for (const payload of payloads) {
-      try {
-        const assignmentId = await AssignmentModel.assignStudentOnce(payload);
-        const assignment = await this.findStudentAssignmentById(assignmentId);
-        if (assignment) assigned.push(assignment);
-      } catch (error) {
-        failed.push({ studentId: payload.studentId, error: describeAssignmentError(error) });
+    for (let i = 0; i < payloads.length; i += concurrency) {
+      const chunk = payloads.slice(i, i + concurrency);
+      const results = await Promise.all(chunk.map(async payload => {
+        try {
+          const assignmentId = await AssignmentModel.assignStudentOnce(payload);
+          const assignment = await this.findStudentAssignmentById(assignmentId);
+          return { ok: true as const, assignment };
+        } catch (error) {
+          return { ok: false as const, studentId: payload.studentId, error: describeAssignmentError(error) };
+        }
+      }));
+      for (const result of results) {
+        if (result.ok) {
+          if (result.assignment) assigned.push(result.assignment);
+        } else {
+          failed.push({ studentId: result.studentId, error: result.error });
+        }
       }
     }
 
@@ -167,6 +196,14 @@ export class AssignmentModel {
   static async unassignStudent(assignmentId: number) {
     const result = await prisma.studentRouteAssignment.updateMany({
       where: { id: assignmentId, unassignedAt: null },
+      data: { unassignedAt: new Date() }
+    });
+    return { affectedRows: result.count };
+  }
+
+  static async unassignStudentByStudentId(studentId: number) {
+    const result = await prisma.studentRouteAssignment.updateMany({
+      where: { studentId, unassignedAt: null },
       data: { unassignedAt: new Date() }
     });
     return { affectedRows: result.count };

@@ -1,0 +1,13 @@
+import { Router } from 'express';
+import { ParentPortalController } from '../controllers/parent-portal.controller.js';
+import { asyncHandler } from '../errors.js';
+import { requireParentSession } from '../middleware/require-scoped-session.js';
+
+export const parentPortalRouter = Router();
+
+parentPortalRouter.use(requireParentSession);
+parentPortalRouter.get('/children', asyncHandler(ParentPortalController.children));
+parentPortalRouter.get('/vehicles', asyncHandler(ParentPortalController.vehicles));
+parentPortalRouter.get('/fee-dues', asyncHandler(ParentPortalController.feeDues));
+parentPortalRouter.get('/payments', asyncHandler(ParentPortalController.payments));
+parentPortalRouter.get('/transport-logs', asyncHandler(ParentPortalController.transportLogs));

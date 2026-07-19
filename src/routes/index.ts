@@ -3,6 +3,9 @@ import { DashboardController } from '../controllers/dashboard.controller.js';
 import { asyncHandler } from '../errors.js';
 import { assignmentsRouter } from './assignments.js';
 import { authRouter } from './auth.js';
+import { mobileAuthRouter } from './mobile-auth.js';
+import { parentPortalRouter } from './parent-portal.js';
+import { driverPortalRouter } from './driver-portal.js';
 import { driversRouter } from './drivers.js';
 import { feeDuesRouter } from './fee-dues.js';
 import { routesRouter } from './routes.js';
@@ -16,6 +19,9 @@ export const router = Router();
 
 router.get('/health', asyncHandler(DashboardController.health));
 router.use('/auth', authRouter);
+router.use('/mobile-auth', mobileAuthRouter);
+router.use('/parent', parentPortalRouter);
+router.use('/driver', driverPortalRouter);
 
 router.use(requireSuperAdmin);
 router.get('/stats', asyncHandler(DashboardController.stats));

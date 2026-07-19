@@ -36,27 +36,45 @@ The API runs on `http://localhost:4000` by default.
 
 ## Main Endpoints
 
-- `GET /api/health`
-- `GET /api/students`
-- `POST /api/students`
-- `PATCH /api/students/:id`
-- `DELETE /api/students/:id`
-- `GET /api/drivers`
-- `POST /api/drivers`
-- `PATCH /api/drivers/:id`
-- `DELETE /api/drivers/:id`
-- `GET /api/vehicles`
-- `POST /api/vehicles`
-- `PATCH /api/vehicles/:id`
-- `DELETE /api/vehicles/:id`
-- `GET /api/assignments`
-- `POST /api/assignments/driver`
-- `DELETE /api/assignments/driver/:assignmentId`
-- `POST /api/assignments/student`
-- `DELETE /api/assignments/student/:assignmentId`
-- `GET /api/vehicles/:id/roster`
+Public (no auth):
 
-Vehicle assignment requests can use either a numeric vehicle id or a vehicle code like `BUS-04`.
+- `GET /api/health`
+- `POST /api/auth/super-admin/login`
+- `POST /api/mobile-auth/parent/request-otp`
+- `POST /api/mobile-auth/parent/verify-otp`
+- `POST /api/mobile-auth/driver/request-otp`
+- `POST /api/mobile-auth/driver/verify-otp`
+
+Parent session (bearer token from mobile-auth, scoped to the signed-in phone number):
+
+- `GET /api/parent/children`
+- `GET /api/parent/vehicles`
+- `GET /api/parent/fee-dues`
+- `GET /api/parent/payments`
+- `GET /api/parent/transport-logs`
+
+Driver session (bearer token from mobile-auth, scoped to the signed-in phone number):
+
+- `GET /api/driver/me`
+- `GET /api/driver/roster`
+- `POST /api/driver/transport-logs`
+
+Everything below requires the super-admin bearer token (`GET /api/auth/super-admin/me` to check it):
+
+- `GET /api/stats`
+- `GET /api/students`, `POST /api/students`, `PATCH /api/students/:id`, `DELETE /api/students/:id`
+- `GET /api/drivers`, `POST /api/drivers`, `PATCH /api/drivers/:id`, `DELETE /api/drivers/:id`
+- `GET /api/vehicles`, `GET /api/vehicles/:id`, `GET /api/vehicles/:id/roster`, `POST /api/vehicles`, `PATCH /api/vehicles/:id`, `DELETE /api/vehicles/:id`
+- `GET /api/routes`, `GET /api/routes/:id`, `POST /api/routes`, `PATCH /api/routes/:id`, `DELETE /api/routes/:id`
+- `GET /api/assignments`
+- `GET /api/assignments/driver-history/:driverId`, `GET /api/assignments/vehicle-history/:vehicleId`, `GET /api/assignments/student-history/:studentId`
+- `POST /api/assignments/driver`, `DELETE /api/assignments/driver/by-driver/:driverId`, `DELETE /api/assignments/driver/:assignmentId`
+- `POST /api/assignments/student`, `POST /api/assignments/students/bulk`, `DELETE /api/assignments/student/by-student/:studentId`, `DELETE /api/assignments/student/:assignmentId`
+- `GET /api/fee-dues`, `GET /api/fee-dues/summary`, `GET /api/fee-dues/report`, `POST /api/fee-dues/generate`, `PATCH /api/fee-dues/:id`
+- `GET /api/payments`, `POST /api/payments`, `PATCH /api/payments/:id`
+- `GET /api/transport-logs`, `POST /api/transport-logs`
+
+Vehicle and driver requests can use either a numeric id or a code like `BUS-04` where noted (`lookup.ts` resolves the ambiguity).
 
 ## Backend Structure
 

@@ -8,10 +8,20 @@ const allowedStatuses = new Set(['Paid', 'Collected', 'Pending', 'Overdue']);
 const allowedMethods = new Set(['UPI', 'Card', 'Cash', 'Bank transfer', '-']);
 
 export class PaymentService {
-  static async list(filters: { q?: string; status?: string; studentId?: string; from?: string; to?: string }) {
+  static async list(filters: { q?: string; status?: string; studentId?: string; studentIds?: number[]; from?: string; to?: string }) {
     const where: Prisma.PaymentWhereInput = {};
-    if (filters.status && filters.status !== 'all') where.status = filters.status as any;
-    if (filters.studentId) where.studentId = Number(filters.studentId);
+    if (filters.status && filters.status !== 'all') {
+      if (!allowedStatuses.has(filters.status)) throw new ApiError(400, 'Unsupported payment status filter');
+      where.status = filters.status as any;
+    }
+    if (filters.studentId) {
+      const studentId = Number(filters.studentId);
+      if (!Number.isInteger(studentId) || studentId <= 0) throw new ApiError(400, 'studentId filter must be a positive integer');
+      where.studentId = studentId;
+    }
+    if (filters.studentIds) {
+      where.studentId = { in: filters.studentIds };
+    }
     if (filters.from || filters.to) {
       where.paidOn = {};
       if (filters.from) where.paidOn.gte = parseDate(filters.from, 'from date');
@@ -30,14 +40,72 @@ export class PaymentService {
 
   static async create(data: Body) {
     const payload = await paymentPayload(data);
-    const created = await prisma.$transaction(async tx => {
-      const row = await tx.payment.create({ data: payload });
-      if (payload.dueId && ['Paid', 'Collected'].includes(payload.status)) {
-        await reconcileDuePayments(tx, payload.dueId);
+    const explicitReceiptId = optionalString(data, ['id', 'receiptId']);
+    const maxAttempts = explicitReceiptId ? 1 : 3;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const created = await prisma.$transaction(async tx => {
+          const row = await tx.payment.create({ data: payload });
+          if (payload.dueId && ['Paid', 'Collected'].includes(payload.status)) {
+            await reconcileDuePayments(tx, payload.dueId);
+          }
+          return row;
+        });
+        return mapPayment(created);
+      } catch (error) {
+        const isReceiptCollision = error instanceof Prisma.PrismaClientKnownRequestError
+          && error.code === 'P2002'
+          && attempt < maxAttempts;
+        if (!isReceiptCollision) throw error;
+        payload.receiptId = await nextReceiptId();
+      }
+    }
+    throw new ApiError(500, 'Unable to create payment receipt after multiple attempts');
+  }
+
+  static async update(idValue: unknown, data: Body) {
+    const receiptId = validateText(String(idValue ?? '').trim(), 'payment id', { min: 1, max: 32 });
+    const existing = await prisma.payment.findUnique({ where: { receiptId } });
+    if (!existing) throw new ApiError(404, 'Payment not found');
+
+    const updateData: Prisma.PaymentUpdateInput = {};
+
+    if (data.status !== undefined) {
+      const status = validateText(String(data.status), 'status', { min: 2, max: 20 });
+      if (!allowedStatuses.has(status)) throw new ApiError(400, 'Unsupported payment status');
+      updateData.status = status as any;
+    }
+    if (data.method !== undefined) {
+      const method = validateText(String(data.method), 'method', { min: 1, max: 40 });
+      if (!allowedMethods.has(method)) throw new ApiError(400, 'Unsupported payment method');
+      updateData.method = method;
+    }
+    if (data.amount !== undefined) {
+      const amountRaw = String(data.amount).trim();
+      if (!/^\d+(\.\d{1,2})?$/.test(amountRaw)) {
+        throw new ApiError(400, 'amount must be a positive number with at most 2 decimal places');
+      }
+      const amount = Number(amountRaw);
+      if (amount <= 0) throw new ApiError(400, 'amount must be greater than 0');
+      updateData.amount = amount;
+    }
+    if (data.date !== undefined) {
+      updateData.paidOn = parseDate(data.date, 'payment date');
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      throw new ApiError(400, 'No updatable fields provided (status, method, amount, date)');
+    }
+
+    const updated = await prisma.$transaction(async tx => {
+      const row = await tx.payment.update({ where: { receiptId }, data: updateData });
+      if (row.dueId) {
+        await reconcileDuePayments(tx, row.dueId);
       }
       return row;
     });
-    return mapPayment(created);
+    return mapPayment(updated);
   }
 }
 
@@ -61,8 +129,12 @@ async function paymentPayload(data: Body) {
   if (dueId && plan.toLowerCase() !== 'monthly') {
     throw new ApiError(400, 'Only monthly payments can link to one due; multi-month plans require explicit due allocations');
   }
-  const amount = Number(requiredOrExisting(data, ['amount'], 'amount'));
-  if (!Number.isInteger(amount) || amount <= 0) throw new ApiError(400, 'amount must be a positive integer');
+  const amountRaw = String(requiredOrExisting(data, ['amount'], 'amount')).trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(amountRaw)) {
+    throw new ApiError(400, 'amount must be a positive number with at most 2 decimal places');
+  }
+  const amount = Number(amountRaw);
+  if (amount <= 0) throw new ApiError(400, 'amount must be greater than 0');
   const method = validateText(requiredOrExisting(data, ['method'], 'method'), 'method', { min: 1, max: 40 });
   if (!allowedMethods.has(method)) throw new ApiError(400, 'Unsupported payment method');
   const status = validateText(requiredOrExisting(data, ['status'], 'status'), 'status', { min: 2, max: 20 });

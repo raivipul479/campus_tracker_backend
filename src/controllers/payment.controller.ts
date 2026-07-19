@@ -16,4 +16,8 @@ export class PaymentController {
   static async create(req: Request, res: Response) {
     res.status(201).json(await PaymentService.create(body(req.body)));
   }
+
+  static async update(req: Request, res: Response) {
+    res.json(await PaymentService.update(req.params.id, body(req.body)));
+  }
 }

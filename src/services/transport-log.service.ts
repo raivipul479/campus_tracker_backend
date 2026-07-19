@@ -6,9 +6,16 @@ import { Body, requiredOrExisting } from '../validators.js';
 const allowedActions = new Set(['Pickup', 'Drop']);
 
 export class TransportLogService {
-  static async list(filters: { studentId?: string; from?: string; to?: string }) {
+  static async list(filters: { studentId?: string; studentIds?: number[]; from?: string; to?: string }) {
     const where: Prisma.TransportLogWhereInput = {};
-    if (filters.studentId) where.studentId = Number(filters.studentId);
+    if (filters.studentId) {
+      const studentId = Number(filters.studentId);
+      if (!Number.isInteger(studentId) || studentId <= 0) throw new ApiError(400, 'studentId filter must be a positive integer');
+      where.studentId = studentId;
+    }
+    if (filters.studentIds) {
+      where.studentId = { in: filters.studentIds };
+    }
     if (filters.from || filters.to) {
       where.recordedAt = {};
       if (filters.from) where.recordedAt.gte = parseDate(filters.from, 'from date');

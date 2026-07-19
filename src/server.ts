@@ -7,6 +7,9 @@ const host = process.env.HOST || '0.0.0.0';
 
 const server = app.listen(config.port, host, () => {
   console.log(`Campus tracker API listening on http://${host}:${config.port}`);
+  console.log(
+    `Database: ${config.db.host}:${config.db.port}/${config.db.database} (NODE_ENV=${config.nodeEnv})`
+  );
 });
 
 const shutdown = async () => {

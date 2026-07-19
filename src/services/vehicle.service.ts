@@ -60,6 +60,9 @@ export class VehicleService {
   static async delete(identifier: unknown) {
     const id = await VehicleModel.resolveId(identifier);
     const result = await VehicleModel.delete(id);
+    if ('conflict' in result && result.conflict) {
+      throw new ApiError(409, 'Vehicle has driver, student, or route assignment history and cannot be hard-deleted');
+    }
     if (!result.affectedRows) throw new ApiError(404, 'Vehicle not found');
   }
 }

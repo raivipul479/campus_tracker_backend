@@ -26,11 +26,18 @@ export class AssignmentController {
   }
 
   static async assignStudentsBulk(req: Request, res: Response) {
-    res.status(201).json(await AssignmentService.assignStudentsBulk(body(req.body)));
+    const result = await AssignmentService.assignStudentsBulk(body(req.body));
+    const allFailed = result.assigned.length === 0 && result.failed.length > 0;
+    res.status(allFailed ? 422 : 201).json(result);
   }
 
   static async unassignStudent(req: Request, res: Response) {
     await AssignmentService.unassignStudent(req.params.assignmentId);
+    res.status(204).send();
+  }
+
+  static async unassignStudentByStudentId(req: Request, res: Response) {
+    await AssignmentService.unassignStudentByStudentId(req.params.studentId);
     res.status(204).send();
   }
 

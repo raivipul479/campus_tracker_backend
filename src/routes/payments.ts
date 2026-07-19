@@ -6,3 +6,4 @@ export const paymentsRouter = Router();
 
 paymentsRouter.get('/', asyncHandler(PaymentController.list));
 paymentsRouter.post('/', asyncHandler(PaymentController.create));
+paymentsRouter.patch('/:id', asyncHandler(PaymentController.update));

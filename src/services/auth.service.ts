@@ -12,7 +12,6 @@ export class AuthService {
       throw new ApiError(400, 'Email and password are required');
     }
 
-    await SuperAdminModel.ensureDefaultAdmin();
     const admin = await SuperAdminModel.findByEmail(email);
 
     if (!admin || !admin.isActive || !verifyPassword(password, admin.passwordSalt, admin.passwordHash)) {

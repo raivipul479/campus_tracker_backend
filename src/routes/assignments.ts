@@ -13,4 +13,5 @@ assignmentsRouter.delete('/driver/by-driver/:driverId', asyncHandler(AssignmentC
 assignmentsRouter.delete('/driver/:assignmentId', asyncHandler(AssignmentController.unassignDriver));
 assignmentsRouter.post('/student', asyncHandler(AssignmentController.assignStudent));
 assignmentsRouter.post('/students/bulk', asyncHandler(AssignmentController.assignStudentsBulk));
+assignmentsRouter.delete('/student/by-student/:studentId', asyncHandler(AssignmentController.unassignStudentByStudentId));
 assignmentsRouter.delete('/student/:assignmentId', asyncHandler(AssignmentController.unassignStudent));

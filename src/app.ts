@@ -7,6 +7,7 @@ import { errorHandler, notFound } from './errors.js';
 import { router } from './routes/index.js';
 
 export const app = express();
+app.set('trust proxy', 1);
 const allowedOrigins = [
   ...config.corsOrigin.split(',').map(origin => origin.trim()),
   'https://location-app-tfks.onrender.com',
@@ -14,6 +15,7 @@ const allowedOrigins = [
 ].filter(Boolean);
 const isAllowedOrigin = (origin: string) => {
   if (allowedOrigins.includes(origin)) return true;
+  if (config.isProduction) return false;
   try {
     const url = new URL(origin);
     return ['localhost', '127.0.0.1'].includes(url.hostname);

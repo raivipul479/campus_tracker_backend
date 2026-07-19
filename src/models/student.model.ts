@@ -15,7 +15,7 @@ export interface StudentPayload {
 }
 
 export class StudentModel {
-  static async findAll(filters: { q?: string; vehicleId?: string; routeId?: string; assigned?: string; className?: string; tagNo?: string }) {
+  static async findAll(filters: { q?: string; vehicleId?: string; routeId?: string; assigned?: string; className?: string; tagNo?: string; phone?: string }) {
     const vehicleFilter = filters.vehicleId
       ? {
           routeAssignments: {
@@ -58,6 +58,7 @@ export class StudentModel {
         ...assignmentFilter,
         ...(filters.className ? { className: filters.className } : {}),
         ...(filters.tagNo ? { tagNo: filters.tagNo } : {}),
+        ...(filters.phone ? { AND: [{ OR: [{ phone: filters.phone }, { secondaryPhone: filters.phone }] }] } : {}),
         ...(filters.q
           ? {
               OR: [

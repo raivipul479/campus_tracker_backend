@@ -13,7 +13,7 @@ import {
 } from '../validators.js';
 
 export class StudentService {
-  static async list(filters: { q?: string; vehicleId?: string; routeId?: string; assigned?: string; className?: string; tagNo?: string }) {
+  static async list(filters: { q?: string; vehicleId?: string; routeId?: string; assigned?: string; className?: string; tagNo?: string; phone?: string }) {
     const students = await StudentModel.findAll(filters);
     return students.map(mapStudent);
   }

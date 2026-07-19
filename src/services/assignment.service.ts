@@ -56,6 +56,11 @@ export class AssignmentService {
     if (!result.affectedRows) throw new ApiError(404, 'Active student assignment not found');
   }
 
+  static async unassignStudentByStudentId(studentIdValue: unknown) {
+    const studentId = positiveId(studentIdValue, 'student id');
+    await AssignmentModel.unassignStudentByStudentId(studentId);
+  }
+
   static async driverHistory(driverIdValue: unknown) {
     return AssignmentModel.driverHistory(positiveId(driverIdValue, 'driver id'));
   }

@@ -14,15 +14,34 @@ const numberFromEnv = (name: string, fallback: number) => {
   return parsed;
 };
 
+const DEFAULT_TOKEN_SECRET = 'change-this-secret-before-production';
+const DEFAULT_SUPER_ADMIN_PASSWORD = 'Admin@12345';
+const isProduction = (process.env.NODE_ENV ?? 'development') === 'production';
+
+const tokenSecret = process.env.AUTH_TOKEN_SECRET ?? DEFAULT_TOKEN_SECRET;
+const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD ?? DEFAULT_SUPER_ADMIN_PASSWORD;
+
+if (isProduction && tokenSecret === DEFAULT_TOKEN_SECRET) {
+  throw new Error(
+    'AUTH_TOKEN_SECRET must be set to a strong, unique value in production. Refusing to start with the default secret.'
+  );
+}
+if (isProduction && superAdminPassword === DEFAULT_SUPER_ADMIN_PASSWORD) {
+  throw new Error(
+    'SUPER_ADMIN_PASSWORD must be set to a strong, unique value in production. Refusing to start with the default password.'
+  );
+}
+
 export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
+  isProduction,
   port: numberFromEnv('PORT', 4000),
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173,http://127.0.0.1:5173',
   auth: {
-    tokenSecret: process.env.AUTH_TOKEN_SECRET ?? 'change-this-secret-before-production',
+    tokenSecret,
     tokenTtlSeconds: numberFromEnv('AUTH_TOKEN_TTL_SECONDS', 60 * 60 * 8),
     defaultSuperAdminEmail: process.env.SUPER_ADMIN_EMAIL ?? 'admin@campus.local',
-    defaultSuperAdminPassword: process.env.SUPER_ADMIN_PASSWORD ?? 'Admin@12345',
+    defaultSuperAdminPassword: superAdminPassword,
     defaultSuperAdminName: process.env.SUPER_ADMIN_NAME ?? 'Super Admin'
   },
   db: {

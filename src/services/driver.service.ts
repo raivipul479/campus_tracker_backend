@@ -7,7 +7,7 @@ const driverStatuses = ['On duty', 'Available', 'Off duty', 'At school'] as cons
 const docsStatuses = ['Verified', 'ExpiringSoon', 'Pending', 'Expired'] as const;
 
 export class DriverService {
-  static async list(filters: { q?: string; status?: string; docs?: string; vehicleId?: string }) {
+  static async list(filters: { q?: string; status?: string; docs?: string; vehicleId?: string; phone?: string }) {
     const drivers = await DriverModel.findAll(filters);
     return drivers.map(mapDriver);
   }
@@ -38,6 +38,9 @@ export class DriverService {
   static async delete(idValue: unknown) {
     const id = positiveId(idValue, 'driver id');
     const result = await DriverModel.delete(id);
+    if ('conflict' in result && result.conflict) {
+      throw new ApiError(409, 'Driver has vehicle assignment history and cannot be hard-deleted');
+    }
     if (!result.affectedRows) throw new ApiError(404, 'Driver not found');
   }
 }
