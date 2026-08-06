@@ -11,3 +11,6 @@ parentPortalRouter.get('/vehicles', asyncHandler(ParentPortalController.vehicles
 parentPortalRouter.get('/fee-dues', asyncHandler(ParentPortalController.feeDues));
 parentPortalRouter.get('/payments', asyncHandler(ParentPortalController.payments));
 parentPortalRouter.get('/transport-logs', asyncHandler(ParentPortalController.transportLogs));
+parentPortalRouter.get('/notifications', asyncHandler(ParentPortalController.notifications));
+parentPortalRouter.post('/notifications/read', asyncHandler(ParentPortalController.markNotificationsRead));
+parentPortalRouter.post('/device-token', asyncHandler(ParentPortalController.registerDevice));

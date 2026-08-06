@@ -56,6 +56,14 @@ export class SuperAdminModel {
     );
   }
 
+  static async updatePasswordByEmail(email: string, hash: string, salt: string) {
+    const result = await execute(
+      'UPDATE super_admins SET password_hash = ?, password_salt = ? WHERE email = ?',
+      [hash, salt, email.trim().toLowerCase()]
+    ) as ResultSetHeader;
+    return result.affectedRows;
+  }
+
   static async ensureDefaultAdmin() {
     const existing = await SuperAdminModel.findByEmail(config.auth.defaultSuperAdminEmail);
     if (existing) return existing;

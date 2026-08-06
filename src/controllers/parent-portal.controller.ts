@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { ParentPortalService } from '../services/parent-portal.service.js';
+import { NotificationService } from '../services/notification.service.js';
 
 export class ParentPortalController {
   static async children(req: Request, res: Response) {
@@ -20,5 +21,24 @@ export class ParentPortalController {
 
   static async transportLogs(req: Request, res: Response) {
     res.json(await ParentPortalService.transportLogs(req.scopedSession!.phone, req.query.studentId ? String(req.query.studentId) : undefined));
+  }
+
+  static async registerDevice(req: Request, res: Response) {
+    res.json(
+      await NotificationService.registerToken(
+        req.scopedSession!.phone,
+        'parent',
+        req.body?.token,
+        req.body?.platform
+      )
+    );
+  }
+
+  static async notifications(req: Request, res: Response) {
+    res.json(await NotificationService.listForParent(req.scopedSession!.phone));
+  }
+
+  static async markNotificationsRead(req: Request, res: Response) {
+    res.json(await NotificationService.markAllRead(req.scopedSession!.phone));
   }
 }

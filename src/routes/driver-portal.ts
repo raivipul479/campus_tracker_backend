@@ -9,3 +9,4 @@ driverPortalRouter.use(requireDriverSession);
 driverPortalRouter.get('/me', asyncHandler(DriverPortalController.me));
 driverPortalRouter.get('/roster', asyncHandler(DriverPortalController.roster));
 driverPortalRouter.post('/transport-logs', asyncHandler(DriverPortalController.createTransportLog));
+driverPortalRouter.post('/device-token', asyncHandler(DriverPortalController.registerDevice));

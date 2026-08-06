@@ -9,4 +9,15 @@ export class AuthController {
   static async me(req: Request, res: Response) {
     res.json({ admin: req.superAdmin });
   }
+
+  static async resetPassword(req: Request, res: Response) {
+    const secret = req.header('x-admin-reset-secret') ?? req.body?.secret;
+    res.json(
+      await AuthService.resetPassword({
+        secret,
+        email: req.body?.email,
+        newPassword: req.body?.newPassword
+      })
+    );
+  }
 }

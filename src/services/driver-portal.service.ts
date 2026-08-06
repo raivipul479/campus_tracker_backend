@@ -3,6 +3,7 @@ import { Body } from '../validators.js';
 import { DriverService } from './driver.service.js';
 import { VehicleService } from './vehicle.service.js';
 import { TransportLogService } from './transport-log.service.js';
+import { NotificationService } from './notification.service.js';
 
 async function driverFor(phone: string) {
   const drivers = await DriverService.list({ phone });
@@ -28,6 +29,13 @@ export class DriverPortalService {
     if (!Number.isInteger(studentId) || studentId <= 0) throw new ApiError(400, 'studentId is invalid');
     const allowed = students.some((student: any) => Number(student.studentId ?? student.id) === studentId);
     if (!allowed) throw new ApiError(403, 'This student is not on your current roster');
-    return TransportLogService.create(data);
+    const log = await TransportLogService.create(data);
+
+    // Notify the parent — never let a push failure block the log response.
+    NotificationService.notifyTransportEvent(studentId, log.action as 'Pickup' | 'Drop').catch(error => {
+      console.error('[notifications] transport event failed:', (error as Error).message);
+    });
+
+    return log;
   }
 }

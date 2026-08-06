@@ -13,6 +13,7 @@ import { paymentsRouter } from './payments.js';
 import { studentsRouter } from './students.js';
 import { transportLogsRouter } from './transport-logs.js';
 import { vehiclesRouter } from './vehicles.js';
+import { notificationsRouter } from './notifications.js';
 import { requireSuperAdmin } from '../middleware/require-super-admin.js';
 
 export const router = Router();
@@ -34,3 +35,4 @@ router.use('/fee-dues', feeDuesRouter);
 router.use('/payments', paymentsRouter);
 router.use('/transport-logs', transportLogsRouter);
 router.use('/assignments', assignmentsRouter);
+router.use('/notifications', notificationsRouter);

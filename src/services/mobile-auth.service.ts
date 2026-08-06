@@ -16,7 +16,8 @@ interface OtpEntry {
 const otpStore = new Map<string, OtpEntry>();
 const OTP_TTL_MS = 5 * 60 * 1000;
 const MAX_VERIFY_ATTEMPTS = 5;
-const MAX_REQUESTS_PER_HOUR = 5;
+// Strict in production; lenient in local/dev so testing isn't blocked.
+const MAX_REQUESTS_PER_HOUR = config.isProduction ? 5 : 100;
 const requestCounts = new Map<string, { count: number; resetAt: number }>();
 
 function otpKey(role: 'parent' | 'driver', phone: string) {

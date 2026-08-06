@@ -272,3 +272,41 @@ enum TransportLogType {
   Pickup
   Drop
 }
+
+model DeviceToken {
+  id        Int          @id @default(autoincrement()) @db.UnsignedInt
+  phone     String       @db.VarChar(32)
+  role      DeviceRole   @default(parent)
+  token     String       @unique(map: "uq_device_tokens_token") @db.VarChar(512)
+  platform  String       @default("android") @db.VarChar(20)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  @@index([phone], map: "idx_device_tokens_phone")
+  @@map("device_tokens")
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement()) @db.UnsignedInt
+  phone     String           @db.VarChar(32)
+  studentId Int?             @map("student_id") @db.UnsignedInt
+  type      NotificationType
+  title     String           @db.VarChar(160)
+  body      String           @db.VarChar(500)
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  @@index([phone, createdAt], map: "idx_notifications_phone_date")
+  @@map("notifications")
+}
+
+enum DeviceRole {
+  parent
+  driver
+}
+
+enum NotificationType {
+  Pickup
+  Drop
+  FeeReminder @map("FeeReminder")
+}

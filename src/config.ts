@@ -50,5 +50,14 @@ export const config = {
     user: process.env.DB_USER ?? 'root',
     password: process.env.DB_PASSWORD ?? '',
     database: process.env.DB_NAME ?? 'campus_tracker'
+  },
+  firebase: {
+    // Path to the service-account JSON file, OR the full JSON as a string
+    // (or base64-encoded JSON). If neither is set, push sending is disabled
+    // and the app still runs — notifications are just stored, not delivered.
+    serviceAccount:
+      process.env.FIREBASE_SERVICE_ACCOUNT ??
+      process.env.FIREBASE_SERVICE_ACCOUNT_PATH ??
+      ''
   }
 };

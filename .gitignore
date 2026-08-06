@@ -7,3 +7,5 @@ dist/
 *.log
 coverage/
 .DS_Store
+firebase-service-account.json
+*-service-account.json

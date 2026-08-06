@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { DriverPortalService } from '../services/driver-portal.service.js';
+import { NotificationService } from '../services/notification.service.js';
 import { body } from '../validators.js';
 
 export class DriverPortalController {
@@ -13,5 +14,16 @@ export class DriverPortalController {
 
   static async createTransportLog(req: Request, res: Response) {
     res.status(201).json(await DriverPortalService.createTransportLog(req.scopedSession!.phone, body(req.body)));
+  }
+
+  static async registerDevice(req: Request, res: Response) {
+    res.json(
+      await NotificationService.registerToken(
+        req.scopedSession!.phone,
+        'driver',
+        req.body?.token,
+        req.body?.platform
+      )
+    );
   }
 }
