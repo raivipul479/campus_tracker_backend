@@ -17,13 +17,24 @@ Stores student and parent-contact information.
 | `registration_number` | Varchar, unique | School registration number |
 | `full_name` | Varchar | Student name |
 | `class_name` | Varchar | Class or grade |
+| `section` | Varchar, nullable | Class section (`A`, `B`, …) |
+| `guardian_name` | Varchar, nullable | Father's / mother's name |
 | `distance_km` | Decimal, nullable | Travel distance |
 | `tag_no` | Varchar, nullable | Transport/RFID tag |
-| `area` | Varchar | Pickup area |
+| `area` | Varchar | Pickup area (short locality) |
+| `address` | Varchar, nullable | Full postal address |
 | `phone` | Varchar | Primary parent phone |
 | `secondary_phone` | Varchar, nullable | Secondary parent phone |
 | `created_at` | Timestamp | Creation time |
 | `updated_at` | Timestamp | Last update time |
+
+`area` and `address` are deliberately separate: `area` is the short locality
+that is `NOT NULL` and drives list filters and search, while `address` holds the
+full postal address and is optional. `section` is its own column rather than
+being parsed out of `class_name`; rows imported before migration
+`20260813_student_profile_fields.sql` may still carry a combined value such as
+`V D` in `class_name`. `guardian_name` is a single field because the source
+records list one combined "Father's/Mother's Name".
 
 Primary and secondary phone numbers are normalized to E.164 at write time and
 indexed for parent lookup. Local 10-digit numbers use the deployment's `+91`

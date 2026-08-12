@@ -56,21 +56,32 @@ function studentPayload(data: Body, existing?: StudentRow) {
   const registrationNumber = validateRegistrationNumber(requiredOrExisting(data, ['regNo', 'registrationNumber'], 'registration number', existing?.registration_number));
   const name = validateText(requiredOrExisting(data, ['name', 'fullName'], 'student name', existing?.full_name), 'student name', { min: 2, max: 160 });
   const className = validateText(requiredOrExisting(data, ['class', 'className'], 'class', existing?.class_name), 'class', { min: 1, max: 80 });
+  const section = optionalString(data, ['section']) ?? existing?.section ?? null;
+  const guardianName = optionalString(data, ['guardianName', 'guardian_name', 'parentName']) ?? existing?.guardian_name ?? null;
   const tagNo = optionalString(data, ['tagNo', 'tag']) ?? existing?.tag_no ?? null;
   const area = validateText(requiredOrExisting(data, ['area'], 'area', existing?.area), 'area', { min: 2, max: 180 });
+  // Full postal address. Optional, and separate from `area` (the short
+  // locality), so existing callers that only send `area` keep working.
+  const address = optionalString(data, ['address']) ?? existing?.address ?? null;
   const phone = validateStudentPhone(requiredOrExisting(data, ['phone'], 'phone', existing?.phone), 'phone');
   const secondaryPhoneInput = optionalString(data, ['secondaryPhone', 'secondary_phone']) ?? existing?.secondary_phone ?? null;
   const secondaryPhone = secondaryPhoneInput ? validateStudentPhone(secondaryPhoneInput, 'secondary phone') : null;
   if (serialNumber) validateText(serialNumber, 'serial number', { max: 32 });
   if (tagNo) validateText(tagNo, 'tag number', { max: 32 });
+  if (section) validateText(section, 'section', { max: 16 });
+  if (guardianName) validateText(guardianName, "father's / mother's name", { max: 160 });
+  if (address) validateText(address, 'address', { max: 255 });
   return {
     serialNumber,
     registrationNumber,
     name,
     className,
+    section,
+    guardianName,
     distanceKm: optionalBoundedNumber(data, ['kms', 'distanceKm'], 'kilometers', { min: 0, max: 500 }) ?? existing?.distance_km ?? null,
     tagNo,
     area,
+    address,
     phone,
     secondaryPhone
   };

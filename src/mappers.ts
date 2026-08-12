@@ -20,9 +20,12 @@ export interface StudentRow {
   registration_number: string;
   full_name: string;
   class_name: string;
+  section: string | null;
+  guardian_name: string | null;
   distance_km: string | number | null;
   tag_no: string | null;
   area: string;
+  address: string | null;
   phone: string;
   secondary_phone: string | null;
   vehicle_code?: string | null;
@@ -75,9 +78,12 @@ export function mapStudent(row: StudentRow) {
     regNo: row.registration_number,
     name: row.full_name,
     class: row.class_name,
+    section: row.section ?? '',
+    guardianName: row.guardian_name ?? '',
     kms: row.distance_km === null ? '' : String(row.distance_km),
     tagNo: row.tag_no ?? '',
     area: row.area,
+    address: row.address ?? '',
     phone: row.phone,
     secondaryPhone: row.secondary_phone ?? '',
     vehicleId: row.vehicle_id ?? null,

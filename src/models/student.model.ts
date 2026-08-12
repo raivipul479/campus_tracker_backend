@@ -7,9 +7,12 @@ export interface StudentPayload {
   registrationNumber: string;
   name: string;
   className: string;
+  section: string | null;
+  guardianName: string | null;
   distanceKm: number | string | null;
   tagNo: string | null;
   area: string;
+  address: string | null;
   phone: string;
   secondaryPhone: string | null;
 }
@@ -65,6 +68,8 @@ export class StudentModel {
                 { fullName: { contains: filters.q } },
                 { registrationNumber: { contains: filters.q } },
                 { area: { contains: filters.q } },
+                { address: { contains: filters.q } },
+                { guardianName: { contains: filters.q } },
                 { tagNo: { contains: filters.q } },
                 { phone: { contains: filters.q } }
               ]
@@ -98,9 +103,12 @@ export class StudentModel {
         registrationNumber: payload.registrationNumber,
         fullName: payload.name,
         className: payload.className,
+        section: payload.section,
+        guardianName: payload.guardianName,
         distanceKm: payload.distanceKm === null ? null : payload.distanceKm,
         tagNo: payload.tagNo,
         area: payload.area,
+        address: payload.address,
         phone: payload.phone,
         secondaryPhone: payload.secondaryPhone
       },
@@ -118,9 +126,12 @@ export class StudentModel {
         registrationNumber: payload.registrationNumber,
         fullName: payload.name,
         className: payload.className,
+        section: payload.section,
+        guardianName: payload.guardianName,
         distanceKm: payload.distanceKm === null ? null : payload.distanceKm,
         tagNo: payload.tagNo,
         area: payload.area,
+        address: payload.address,
         phone: payload.phone,
         secondaryPhone: payload.secondaryPhone
       },
@@ -163,9 +174,12 @@ function mapStudentRecord(student: any): StudentRow {
     registration_number: student.registrationNumber,
     full_name: student.fullName,
     class_name: student.className,
+    section: student.section ?? null,
+    guardian_name: student.guardianName ?? null,
     distance_km: student.distanceKm === null ? null : Number(student.distanceKm),
     tag_no: student.tagNo,
     area: student.area,
+    address: student.address ?? null,
     phone: student.phone,
     secondary_phone: student.secondaryPhone,
     vehicle_id: vehicle?.id ?? null,
