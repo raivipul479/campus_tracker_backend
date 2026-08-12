@@ -49,25 +49,13 @@ export class NotificationService {
   }
 
   // Admin fee reminder — one student or every student with outstanding dues.
-  // At most one FeeReminder per student per calendar day, enforced here (not
-  // just in the UI) so it can't be bypassed by calling the API directly.
+  // Deliberately unthrottled: admins asked to be able to re-send on demand
+  // (a parent deletes the notification, registers a new device, or simply
+  // needs chasing twice in a day), so there is no per-day cap here or in the UI.
   static async sendFeeReminder(payload: { studentId?: unknown; all?: unknown }) {
-    const allTargets = payload.studentId
+    const targets = payload.studentId
       ? await NotificationService.singleTarget(payload.studentId)
       : await NotificationService.allOutstandingTargets();
-
-    const studentIds = [...new Set(allTargets.map(t => t.studentId))];
-    const alreadyReminded = await NotificationModel.remindedSince(
-      studentIds,
-      'FeeReminder',
-      startOfToday()
-    );
-
-    if (payload.studentId && alreadyReminded.size > 0) {
-      throw new ApiError(429, 'A fee reminder was already sent to this student today. Try again tomorrow.');
-    }
-
-    const targets = allTargets.filter(target => !alreadyReminded.has(target.studentId));
 
     let sent = 0;
     for (const target of targets) {
@@ -86,8 +74,53 @@ export class NotificationService {
     }
     return {
       sent,
-      students: new Set(targets.map(t => t.studentId)).size,
-      skippedAlreadyReminded: alreadyReminded.size
+      students: new Set(targets.map(t => t.studentId)).size
+    };
+  }
+
+  // Admin-facing history of everything that has been sent, newest first,
+  // with the student's name resolved for display. Notification has no Prisma
+  // relation to Student, so names are looked up in a second query.
+  static async listAll(query: {
+    type?: unknown;
+    phone?: unknown;
+    studentId?: unknown;
+    from?: unknown;
+    to?: unknown;
+    limit?: unknown;
+  }) {
+    const filters = {
+      type: parseType(query.type),
+      phone: query.phone ? validatePhone(String(query.phone)) : undefined,
+      studentId: parsePositiveInt(query.studentId, 'studentId'),
+      from: parseDate(query.from, 'from'),
+      to: parseDate(query.to, 'to', true),
+      limit: Math.min(Math.max(parsePositiveInt(query.limit, 'limit') ?? 200, 1), 500)
+    };
+
+    const [rows, total] = await Promise.all([
+      NotificationModel.listAll(filters),
+      NotificationModel.countAll(filters)
+    ]);
+
+    const studentIds = [
+      ...new Set(rows.map(row => row.studentId).filter((id): id is number => id !== null))
+    ];
+    const students = studentIds.length
+      ? await prisma.student.findMany({
+          where: { id: { in: studentIds } },
+          select: { id: true, fullName: true }
+        })
+      : [];
+    const nameById = new Map(students.map(student => [student.id, student.fullName]));
+
+    return {
+      total,
+      returned: rows.length,
+      notifications: rows.map(row => ({
+        ...row,
+        studentName: row.studentId ? nameById.get(row.studentId) ?? null : null
+      }))
     };
   }
 
@@ -171,7 +204,36 @@ function uniquePhones(values: (string | null | undefined)[]) {
   return [...new Set(values.filter((value): value is string => Boolean(value)))];
 }
 
-function startOfToday() {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+const NOTIFICATION_TYPES = ['Pickup', 'Drop', 'FeeReminder'] as const;
+
+function parseType(value: unknown): NotificationType | undefined {
+  const text = String(value ?? '').trim();
+  if (!text || text === 'all') return undefined;
+  const match = NOTIFICATION_TYPES.find(type => type === text);
+  if (!match) throw new ApiError(400, `type must be one of ${NOTIFICATION_TYPES.join(', ')}`);
+  return match;
+}
+
+function parsePositiveInt(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new ApiError(400, `${field} must be a positive integer`);
+  }
+  return parsed;
+}
+
+function parseDate(value: unknown, field: string, endOfDay = false): Date | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const text = String(value).trim();
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new ApiError(400, `${field} must be a valid date`);
+  }
+  // A date-only bound like "2026-08-09" parses to midnight, which as an upper
+  // bound would exclude everything sent that day. Push it to the day's end.
+  if (endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    parsed.setHours(23, 59, 59, 999);
+  }
+  return parsed;
 }

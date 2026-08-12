@@ -4,4 +4,5 @@ import { asyncHandler } from '../errors.js';
 
 export const notificationsRouter = Router();
 
+notificationsRouter.get('/', asyncHandler(NotificationController.list));
 notificationsRouter.post('/fee-reminder', asyncHandler(NotificationController.feeReminder));

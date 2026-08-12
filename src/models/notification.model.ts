@@ -40,25 +40,56 @@ export class NotificationModel {
     });
   }
 
-  // Student ids that already received a notification of this type today
-  // (local calendar day), used to enforce a once-per-day send limit.
-  static async remindedSince(studentIds: number[], type: NotificationType, since: Date) {
-    if (!studentIds.length) return new Set<number>();
+  // Admin-facing history across every recipient. Newest first, capped so a
+  // large school can't pull the whole table in one request.
+  static async listAll(filters: NotificationListFilters = {}) {
+    const { type, phone, studentId, from, to, limit = 200 } = filters;
+    const createdAt: { gte?: Date; lte?: Date } = {};
+    if (from) createdAt.gte = from;
+    if (to) createdAt.lte = to;
+
     const rows = await prisma.notification.findMany({
       where: {
-        studentId: { in: studentIds },
-        type,
-        createdAt: { gte: since }
+        ...(type ? { type } : {}),
+        ...(phone ? { phone } : {}),
+        ...(studentId ? { studentId } : {}),
+        ...(from || to ? { createdAt } : {})
       },
-      select: { studentId: true },
-      distinct: ['studentId']
+      orderBy: { createdAt: 'desc' },
+      take: limit
     });
-    return new Set(rows.map(row => row.studentId).filter((id): id is number => id !== null));
+    return rows.map(mapNotification);
   }
+
+  static async countAll(filters: NotificationListFilters = {}) {
+    const { type, phone, studentId, from, to } = filters;
+    const createdAt: { gte?: Date; lte?: Date } = {};
+    if (from) createdAt.gte = from;
+    if (to) createdAt.lte = to;
+
+    return prisma.notification.count({
+      where: {
+        ...(type ? { type } : {}),
+        ...(phone ? { phone } : {}),
+        ...(studentId ? { studentId } : {}),
+        ...(from || to ? { createdAt } : {})
+      }
+    });
+  }
+}
+
+export interface NotificationListFilters {
+  type?: NotificationType;
+  phone?: string;
+  studentId?: number;
+  from?: Date;
+  to?: Date;
+  limit?: number;
 }
 
 function mapNotification(row: {
   id: number;
+  phone: string;
   studentId: number | null;
   type: string;
   title: string;
@@ -68,6 +99,7 @@ function mapNotification(row: {
 }) {
   return {
     id: row.id,
+    phone: row.phone,
     studentId: row.studentId,
     type: row.type,
     title: row.title,
