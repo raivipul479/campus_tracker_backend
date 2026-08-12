@@ -14,7 +14,10 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           port: ${{ secrets.VPS_PORT }}
           username: ${{ secrets.VPS_USER }}
+          # Key auth is preferred and wins when both are set; VPS_PASSWORD is
+          # the fallback for hosts that only have password login configured.
           key: ${{ secrets.VPS_SSH_KEY }}
+          password: ${{ secrets.VPS_PASSWORD }}
           script: |
             set -e
             cd ~/campus_tracker/campus_tracker_backend
