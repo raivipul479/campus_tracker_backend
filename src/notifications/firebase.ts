@@ -72,7 +72,14 @@ export async function sendToTokens(tokens: string[], payload: PushPayload): Prom
         tokens: batch,
         notification: { title: payload.title, body: payload.body },
         data: payload.data ?? {},
-        android: { priority: 'high' },
+        android: {
+          priority: 'high',
+          // Must match _channelId in the app's push_notifications.dart and the
+          // default_notification_channel_id meta-data in AndroidManifest.xml.
+          // Without it, background notifications land in a low-importance
+          // fallback channel and arrive silently.
+          notification: { channelId: 'campus_tracker_default' }
+        },
         apns: { payload: { aps: { sound: 'default' } } }
       });
 
