@@ -1,8 +1,22 @@
 import { Request, Response } from 'express';
+import { ApiError } from '../errors.js';
 import { StudentService } from '../services/student.service.js';
+import { StudentImportService } from '../services/student-import.service.js';
 import { body } from '../validators.js';
 
 export class StudentController {
+  // Bulk import from the transport spreadsheet. Defaults to a dry run so the
+  // dashboard can show what would happen before anything is written.
+  static async importSheet(req: Request, res: Response) {
+    const payload = body(req.body);
+    const commit = payload.commit === true || payload.commit === 'true';
+    const rowOffset = Number(payload.rowOffset ?? 0);
+    if (!Number.isInteger(rowOffset) || rowOffset < 0) {
+      throw new ApiError(400, 'rowOffset must be a non-negative integer');
+    }
+    res.json(await StudentImportService.run(payload.rows, commit, rowOffset));
+  }
+
   static async list(req: Request, res: Response) {
     res.json(await StudentService.list({
       q: req.query.q ? String(req.query.q) : undefined,
