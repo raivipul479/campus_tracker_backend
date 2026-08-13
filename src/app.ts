@@ -31,7 +31,16 @@ app.use(cors({
       callback(null, true);
       return;
     }
-    callback(new Error(`Origin ${origin} is not allowed by CORS`));
+    // A localhost origin rejected in production mode is almost always someone
+    // running the server locally with NODE_ENV=production, where .env.production
+    // supplies CORS_ORIGIN and the localhost allowance above is switched off.
+    // Say so, rather than leaving them to guess at the port.
+    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+    const hint = isLocalhost && config.isProduction
+      ? ` — the server is running with NODE_ENV=production, which only allows CORS_ORIGIN from .env.production.` +
+        ` For local development run "npm run dev" (or "npm start" for the compiled build) instead of "npm run start:prod".`
+      : '';
+    callback(new Error(`Origin ${origin} is not allowed by CORS${hint}`));
   }
 }));
 app.use(express.json({ limit: '1mb' }));
