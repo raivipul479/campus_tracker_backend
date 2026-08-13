@@ -1,11 +1,16 @@
 node_modules/
 dist/
 .env
-.env.local
-.env.development
-.env.production
+.env.*
+!.env.example
 *.log
 coverage/
 .DS_Store
 firebase-service-account.json
 *-service-account.json
+
+# Local DB snapshots — contain student PII, never commit
+backup-*.json
+
+# JetBrains
+.idea/
