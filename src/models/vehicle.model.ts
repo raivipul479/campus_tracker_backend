@@ -263,6 +263,8 @@ function mapStudentRecord(student: any, route: any): StudentRow {
     tag_no: student.tagNo,
     area: student.area,
     address: student.address ?? null,
+    on_hold: Boolean(student.onHold),
+    branch: student.branch ?? null,
     phone: student.phone,
     secondary_phone: student.secondaryPhone,
     vehicle_id: vehicle?.id ?? null,

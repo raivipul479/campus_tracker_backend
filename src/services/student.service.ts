@@ -63,6 +63,24 @@ function studentPayload(data: Body, existing?: StudentRow) {
   // Full postal address. Optional, and separate from `area` (the short
   // locality), so existing callers that only send `area` keep working.
   const address = optionalString(data, ['address']) ?? existing?.address ?? null;
+
+  // A held student disappears from the driver's roster and the driver can no
+  // longer log a pickup or drop for them. Admin and parent views are unchanged.
+  const onHoldInput = data.onHold ?? data.on_hold;
+  const onHold = onHoldInput === undefined || onHoldInput === null || onHoldInput === ''
+    ? (existing?.on_hold ?? false)
+    : onHoldInput === true || onHoldInput === 'true' || onHoldInput === 1 || onHoldInput === '1' || onHoldInput === 'Yes';
+
+  // JPC / JPIC — required, because the parent app switches its payment button
+  // on this and a student with no branch gets no button at all.
+  //
+  // The column stays nullable at the database level: students created by the
+  // bulk sheet import have no branch (the sheet has no such column), and making
+  // it NOT NULL would reject them outright. Required is enforced here and in
+  // the admin form instead.
+  const branch = validateBranch(
+    requiredOrExisting(data, ['branch'], 'branch', existing?.branch ?? undefined)
+  );
   const phone = validateStudentPhone(requiredOrExisting(data, ['phone'], 'phone', existing?.phone), 'phone');
   const secondaryPhoneInput = optionalString(data, ['secondaryPhone', 'secondary_phone']) ?? existing?.secondary_phone ?? null;
   const secondaryPhone = secondaryPhoneInput ? validateStudentPhone(secondaryPhoneInput, 'secondary phone') : null;
@@ -82,6 +100,8 @@ function studentPayload(data: Body, existing?: StudentRow) {
     tagNo,
     area,
     address,
+    onHold,
+    branch,
     phone,
     secondaryPhone
   };
@@ -89,4 +109,14 @@ function studentPayload(data: Body, existing?: StudentRow) {
 
 function validateStudentPhone(value: string, label: string) {
   return validatePhone(value, label);
+}
+
+const BRANCHES = ['JPC', 'JPIC'] as const;
+
+function validateBranch(value: string) {
+  const branch = value.trim().toUpperCase();
+  if (!BRANCHES.includes(branch as (typeof BRANCHES)[number])) {
+    throw new ApiError(400, `branch must be one of ${BRANCHES.join(', ')}`);
+  }
+  return branch;
 }

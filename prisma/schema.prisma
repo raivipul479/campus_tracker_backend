@@ -33,6 +33,8 @@ model Student {
   tagNo              String?                     @unique(map: "uq_students_tag_no") @map("tag_no") @db.VarChar(32)
   area               String                      @db.VarChar(180)
   address            String?                     @db.VarChar(255)
+  onHold             Boolean                     @default(false) @map("on_hold")
+  branch             StudentBranch?
   phone              String                      @db.VarChar(32)
   secondaryPhone     String?                     @map("secondary_phone") @db.VarChar(32)
   createdAt          DateTime                    @default(now()) @map("created_at")
@@ -312,4 +314,11 @@ enum NotificationType {
   Pickup
   Drop
   FeeReminder @map("FeeReminder")
+}
+
+// School branch. Decides which payment button the parent app shows, so the
+// two values must match what the mobile app switches on.
+enum StudentBranch {
+  JPC
+  JPIC
 }

@@ -13,6 +13,8 @@ export interface StudentPayload {
   tagNo: string | null;
   area: string;
   address: string | null;
+  onHold: boolean;
+  branch: string | null;
   phone: string;
   secondaryPhone: string | null;
 }
@@ -109,6 +111,8 @@ export class StudentModel {
         tagNo: payload.tagNo,
         area: payload.area,
         address: payload.address,
+        onHold: payload.onHold,
+        branch: (payload.branch as any) ?? null,
         phone: payload.phone,
         secondaryPhone: payload.secondaryPhone
       },
@@ -132,6 +136,8 @@ export class StudentModel {
         tagNo: payload.tagNo,
         area: payload.area,
         address: payload.address,
+        onHold: payload.onHold,
+        branch: (payload.branch as any) ?? null,
         phone: payload.phone,
         secondaryPhone: payload.secondaryPhone
       },
@@ -180,6 +186,8 @@ function mapStudentRecord(student: any): StudentRow {
     tag_no: student.tagNo,
     area: student.area,
     address: student.address ?? null,
+    on_hold: Boolean(student.onHold),
+    branch: student.branch ?? null,
     phone: student.phone,
     secondary_phone: student.secondaryPhone,
     vehicle_id: vehicle?.id ?? null,

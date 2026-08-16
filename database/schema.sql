@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS students (
   tag_no VARCHAR(32) NULL,
   area VARCHAR(180) NOT NULL,
   address VARCHAR(255) NULL,
+  on_hold TINYINT(1) NOT NULL DEFAULT 0,
+  branch ENUM('JPC', 'JPIC') NULL,
   phone VARCHAR(32) NOT NULL,
   secondary_phone VARCHAR(32) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -33,7 +35,8 @@ CREATE TABLE IF NOT EXISTS students (
   KEY idx_students_name (full_name),
   UNIQUE KEY uq_students_tag_no (tag_no),
   KEY idx_students_phone (phone),
-  KEY idx_students_secondary_phone (secondary_phone)
+  KEY idx_students_secondary_phone (secondary_phone),
+  KEY idx_students_on_hold (on_hold)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS drivers (

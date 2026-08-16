@@ -26,6 +26,8 @@ export interface StudentRow {
   tag_no: string | null;
   area: string;
   address: string | null;
+  on_hold: boolean;
+  branch: string | null;
   phone: string;
   secondary_phone: string | null;
   vehicle_code?: string | null;
@@ -84,6 +86,8 @@ export function mapStudent(row: StudentRow) {
     tagNo: row.tag_no ?? '',
     area: row.area,
     address: row.address ?? '',
+    onHold: Boolean(row.on_hold),
+    branch: row.branch ?? '',
     phone: row.phone,
     secondaryPhone: row.secondary_phone ?? '',
     vehicleId: row.vehicle_id ?? null,

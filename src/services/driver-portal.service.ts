@@ -20,7 +20,15 @@ export class DriverPortalService {
   static async roster(phone: string) {
     const driver = await driverFor(phone);
     if (!driver.vehicleId) return { vehicle: null, students: [] };
-    return VehicleService.roster(driver.vehicleId);
+    const { vehicle, students } = await VehicleService.roster(driver.vehicleId);
+
+    // Held students are hidden from the driver only. The admin vehicle roster
+    // deliberately still shows them, otherwise there would be no way to see a
+    // held student in order to release the hold.
+    //
+    // createTransportLog below validates against this same list, so a held
+    // student also cannot have a pickup or drop logged against them.
+    return { vehicle, students: students.filter((student: any) => !student.onHold) };
   }
 
   static async createTransportLog(phone: string, data: Body) {
