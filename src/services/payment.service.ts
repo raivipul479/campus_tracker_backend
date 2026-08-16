@@ -107,7 +107,38 @@ export class PaymentService {
     });
     return mapPayment(updated);
   }
+
+  /**
+   * Removes a wrongly entered receipt.
+   *
+   * The linked due is recomputed from the payments that remain, inside the same
+   * transaction, so deleting the only payment against a due reopens it with the
+   * full balance rather than leaving it falsely marked Paid.
+   */
+  static async delete(idValue: unknown) {
+    const receiptId = validateText(String(idValue ?? '').trim(), 'payment id', { min: 1, max: 32 });
+    const existing = await prisma.payment.findUnique({ where: { receiptId } });
+    if (!existing) throw new ApiError(404, 'Payment not found');
+
+    await prisma.$transaction(async tx => {
+      await tx.payment.delete({ where: { receiptId } });
+      // Read the dueId from the row captured before deletion — after the delete
+      // there is nothing left to read it from.
+      if (existing.dueId) await reconcileDuePayments(tx, existing.dueId);
+    });
+
+    return { deleted: receiptId, dueRecalculated: existing.dueId ?? null };
+  }
 }
+
+// How many quarterly dues each plan covers. Kept in step with the plan options
+// on the Record payment form.
+export const PLAN_QUARTERS: Record<string, number> = {
+  quarterly: 1,
+  'half-yearly': 2,
+  'half yearly': 2,
+  annual: 4
+};
 
 async function paymentPayload(data: Body) {
   const dueId = data.dueId === undefined || data.dueId === null || data.dueId === '' ? null : Number(data.dueId);
@@ -126,8 +157,12 @@ async function paymentPayload(data: Body) {
   if (due && due.studentId !== student.id) throw new ApiError(400, 'dueId does not belong to studentId');
   const studentName = student.fullName;
   const plan = validateText(requiredOrExisting(data, ['plan'], 'fee plan'), 'fee plan', { min: 2, max: 80 });
-  if (dueId && plan.toLowerCase() !== 'monthly') {
-    throw new ApiError(400, 'Only monthly payments can link to one due; multi-month plans require explicit due allocations');
+  // Fees are billed per quarter, so exactly one quarter maps onto one due.
+  // Half-yearly (2 quarters) and Annual (4) span several dues and a payment
+  // carries a single dueId, so those are posted one quarter at a time and each
+  // instalment links to its own due.
+  if (dueId && PLAN_QUARTERS[plan.toLowerCase()] !== 1) {
+    throw new ApiError(400, 'Only a Quarterly payment can link to a single due; Half-yearly and Annual cover several quarters and must be posted one quarter at a time');
   }
   const amountRaw = String(requiredOrExisting(data, ['amount'], 'amount')).trim();
   if (!/^\d+(\.\d{1,2})?$/.test(amountRaw)) {

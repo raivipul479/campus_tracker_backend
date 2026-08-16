@@ -252,14 +252,28 @@ function statusFor(balance: number, paidAmount: number, total: number): FeeDueSt
   return 'Pending';
 }
 
+// Fees are billed per QUARTER: a route's `fee` is one quarter's charge, and a
+// student gets one due per quarter. The column is still called `month` and is
+// VARCHAR(7), which fits "2026-Q3" exactly.
+//
+// A YYYY-MM value is accepted and folded into the quarter it falls in, so any
+// caller still passing a month lands on the right due instead of silently
+// creating a parallel monthly one.
 function monthValue(value: string) {
-  if (!/^\d{4}-\d{2}$/.test(value)) throw new ApiError(400, 'month must be YYYY-MM');
-  return value;
+  const text = value.trim().toUpperCase();
+  if (/^\d{4}-Q[1-4]$/.test(text)) return text;
+  const month = text.match(/^(\d{4})-(\d{2})$/);
+  if (month) {
+    const monthNumber = Number(month[2]);
+    if (monthNumber < 1 || monthNumber > 12) throw new ApiError(400, 'month must be 01-12');
+    return `${month[1]}-Q${Math.floor((monthNumber - 1) / 3) + 1}`;
+  }
+  throw new ApiError(400, 'period must be YYYY-Qn (e.g. 2026-Q3) or YYYY-MM');
 }
 
 function currentMonth() {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  return `${now.getFullYear()}-Q${Math.floor(now.getMonth() / 3) + 1}`;
 }
 
 function parseDate(value: unknown, label: string) {

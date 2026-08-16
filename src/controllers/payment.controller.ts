@@ -20,4 +20,8 @@ export class PaymentController {
   static async update(req: Request, res: Response) {
     res.json(await PaymentService.update(req.params.id, body(req.body)));
   }
+
+  static async delete(req: Request, res: Response) {
+    res.json(await PaymentService.delete(req.params.id));
+  }
 }
