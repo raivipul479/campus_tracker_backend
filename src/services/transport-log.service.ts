@@ -44,9 +44,22 @@ export class TransportLogService {
     const accuracy = numberField(data.accuracy ?? 0, 'accuracy', 0, 100000);
     const recordedAt = parseDate(data.recordedAt ?? new Date().toISOString(), 'recordedAt');
 
+    // Recorded so driver attendance can be reported. The driver portal supplies
+    // it; a log created any other way stays unattributed rather than being
+    // guessed from the student's current route, since vehicle and driver
+    // assignments change over time.
+    const driverIdRaw = data.driverId;
+    const driverId = driverIdRaw === undefined || driverIdRaw === null || driverIdRaw === ''
+      ? null
+      : Number(driverIdRaw);
+    if (driverId !== null && (!Number.isInteger(driverId) || driverId <= 0)) {
+      throw new ApiError(400, 'driverId is invalid');
+    }
+
     const created = await prisma.transportLog.create({
       data: {
         studentId,
+        driverId,
         action: action as any,
         recordedAt,
         latitude,

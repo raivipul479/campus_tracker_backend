@@ -212,6 +212,7 @@ function mapPayment(row: {
   paidOn: Date;
   method: string;
   status: string;
+  createdAt?: Date;
 }) {
   return {
     id: row.receiptId,
@@ -223,6 +224,10 @@ function mapPayment(row: {
     amount: String(Number(row.amount)),
     date: row.paidOn.toISOString().slice(0, 10),
     method: row.method,
-    status: row.status
+    status: row.status,
+    // When the receipt was actually entered, as opposed to `date`, which is the
+    // payment date the operator typed in. The two differ on back-dated entries,
+    // and the audit trail is the point of recording it.
+    createdAt: row.createdAt ? row.createdAt.toISOString() : null
   };
 }

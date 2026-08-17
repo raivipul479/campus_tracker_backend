@@ -108,6 +108,7 @@ model Driver {
   createdAt          DateTime                  @default(now()) @map("created_at")
   updatedAt          DateTime                  @updatedAt @map("updated_at")
   vehicleAssignments DriverVehicleAssignment[]
+  transportLogs      TransportLog[]
 
   @@index([fullName], map: "idx_drivers_name")
   @@index([status], map: "idx_drivers_status")
@@ -212,6 +213,7 @@ model StudentRouteAssignment {
 model TransportLog {
   id        Int              @id @default(autoincrement()) @db.UnsignedInt
   studentId Int              @map("student_id") @db.UnsignedInt
+  driverId  Int?             @map("driver_id") @db.UnsignedInt
   action    TransportLogType
   recordedAt DateTime       @map("recorded_at")
   latitude  Decimal         @db.Decimal(10, 7)
@@ -219,8 +221,10 @@ model TransportLog {
   accuracy  Decimal         @default(0) @db.Decimal(8, 2)
   createdAt DateTime        @default(now()) @map("created_at")
   student   Student         @relation(fields: [studentId], references: [id], onDelete: Restrict, map: "fk_transport_logs_student")
+  driver    Driver?         @relation(fields: [driverId], references: [id], onDelete: SetNull, map: "fk_transport_logs_driver")
 
   @@index([studentId, recordedAt], map: "idx_transport_logs_student_date")
+  @@index([driverId, recordedAt], map: "idx_transport_logs_driver_date")
   @@index([action], map: "idx_transport_logs_action")
   @@map("transport_logs")
 }

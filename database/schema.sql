@@ -198,6 +198,7 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE TABLE IF NOT EXISTS transport_logs (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   student_id INT UNSIGNED NOT NULL,
+  driver_id INT UNSIGNED NULL,
   action ENUM('Pickup', 'Drop') NOT NULL,
   recorded_at DATETIME NOT NULL,
   latitude DECIMAL(10, 7) NOT NULL,
@@ -206,8 +207,12 @@ CREATE TABLE IF NOT EXISTS transport_logs (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_transport_logs_student_date (student_id, recorded_at),
+  KEY idx_transport_logs_driver_date (driver_id, recorded_at),
   KEY idx_transport_logs_action (action),
   CONSTRAINT fk_transport_logs_student
     FOREIGN KEY (student_id) REFERENCES students(id)
-    ON DELETE RESTRICT
+    ON DELETE RESTRICT,
+  CONSTRAINT fk_transport_logs_driver
+    FOREIGN KEY (driver_id) REFERENCES drivers(id)
+    ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

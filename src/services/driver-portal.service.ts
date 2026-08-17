@@ -32,12 +32,14 @@ export class DriverPortalService {
   }
 
   static async createTransportLog(phone: string, data: Body) {
+    const driver = await driverFor(phone);
     const { students } = await DriverPortalService.roster(phone);
     const studentId = Number(data.studentId);
     if (!Number.isInteger(studentId) || studentId <= 0) throw new ApiError(400, 'studentId is invalid');
     const allowed = students.some((student: any) => Number(student.studentId ?? student.id) === studentId);
     if (!allowed) throw new ApiError(403, 'This student is not on your current roster');
-    const log = await TransportLogService.create(data);
+    // Stamp the log with the driver who recorded it, for the attendance report.
+    const log = await TransportLogService.create({ ...data, driverId: driver.driverId });
 
     // Notify the parent — never let a push failure block the log response.
     NotificationService.notifyTransportEvent(studentId, log.action as 'Pickup' | 'Drop').catch(error => {
