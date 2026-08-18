@@ -1,5 +1,6 @@
 import { ApiError } from '../errors.js';
 import { prisma } from '../prisma.js';
+import { normalizeRouteCode } from '../validators.js';
 
 /**
  * Bulk student import from the school's transport spreadsheet.
@@ -177,7 +178,7 @@ export class StudentImportService {
           address: address.slice(0, 255),
           phone: normalizePhone(phoneRaw, 'phone number'),
           secondaryPhone: secondaryRaw ? normalizePhone(secondaryRaw, 'secondary phone') : null,
-          routeCode: cell(row, COL.routeCode).toUpperCase() || null,
+          routeCode: normalizeRouteCode(cell(row, COL.routeCode)) || null,
           distanceKm: parseSlabKm(cell(row, COL.slabKm))
         });
       } catch (error) {

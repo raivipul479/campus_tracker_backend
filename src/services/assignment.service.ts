@@ -81,9 +81,17 @@ function parseStudentAssignment(data: Body, labelPrefix = '') {
     throw new ApiError(400, `${labelPrefix}routeId is required`);
   }
   if (notes) validateText(notes, 'notes', { max: 255 });
+  // Absent means "work it out from the route"; an explicit empty value means the
+  // student is on no slab and bills the route's flat fee.
+  const slabRaw = data.slabId ?? data.slab;
+  const slabId = slabRaw === undefined ? undefined
+    : slabRaw === null || slabRaw === '' || slabRaw === 'none' ? null
+    : positiveId(slabRaw, `${labelPrefix}slabId`);
+
   return {
     studentId: positiveId(data.studentId, `${labelPrefix}studentId`),
     routeIdentifier,
+    slabId,
     pickupOrder: optionalBoundedNumber(data, ['pickupOrder', 'pickup_order'], 'pickup order', { min: 1, max: 500, integer: true }),
     notes
   };

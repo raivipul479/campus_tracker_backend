@@ -164,7 +164,7 @@ function activeVehicleInclude() {
   return {
     routeAssignments: {
       where: { unassignedAt: null },
-      include: { route: { include: { vehicle: true } } },
+      include: { route: { include: { vehicle: true } }, slab: true },
       take: 1
     }
   } as const;
@@ -195,6 +195,11 @@ function mapStudentRecord(student: any): StudentRow {
     route_id: route?.id ?? null,
     route_code: route?.routeCode ?? null,
     route_name: route?.name ?? null,
-    route_fee: route?.fee ?? 0
+    // The slab the student is billed on. Its fee, not the route's, is what they
+    // owe; the route fee applies only to routes with no slabs.
+    slab_id: assignment?.slab?.id ?? null,
+    slab_min_km: assignment?.slab ? Number(assignment.slab.minKm) : null,
+    slab_max_km: assignment?.slab ? Number(assignment.slab.maxKm) : null,
+    route_fee: assignment?.slab?.fee ?? route?.fee ?? 0
   };
 }

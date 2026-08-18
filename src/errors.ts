@@ -11,6 +11,20 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Prisma's "table does not exist" (P2021), for one specific table.
+ *
+ * Code and database migrations ship separately here — migrations are applied by
+ * hand, deliberately, and not as part of a deploy — so a table introduced by an
+ * unapplied migration can legitimately be missing for a while. Features built on
+ * such a table degrade instead of taking their whole screen down with them.
+ */
+export function isMissingTable(error: unknown, table: string) {
+  return error instanceof Prisma.PrismaClientKnownRequestError
+    && error.code === 'P2021'
+    && String((error.meta as { table?: unknown } | undefined)?.table ?? '').includes(table);
+}
+
 export const asyncHandler =
   (handler: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) =>
   (req: Request, res: Response, next: NextFunction) => {

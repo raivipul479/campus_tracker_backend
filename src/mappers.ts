@@ -33,6 +33,9 @@ export interface StudentRow {
   vehicle_code?: string | null;
   vehicle_id?: number | null;
   route_id?: number | null;
+  slab_id?: number | null;
+  slab_min_km?: number | null;
+  slab_max_km?: number | null;
   route_code?: string | null;
   route_name?: string | null;
   route_fee?: string | number | null;
@@ -96,9 +99,20 @@ export function mapStudent(row: StudentRow) {
     routeCode: row.route_code ?? null,
     route: row.route_code ?? '',
     routeName: row.route_name ?? '',
+    slabId: row.slab_id ?? null,
+    slab: row.slab_id === null || row.slab_id === undefined ? '' : String(row.slab_id),
+    slabRange: row.slab_min_km === null || row.slab_min_km === undefined ? '' : `${row.slab_min_km}-${row.slab_max_km} km`,
+    // The slab's fee where there is one, otherwise the route's flat fee.
     monthlyDue: Number(row.route_fee ?? 0),
     initials: initialsFor(row.full_name)
   };
+}
+
+export interface RouteFeeSlabRow {
+  id: number;
+  min_km: string | number;
+  max_km: string | number;
+  fee: string | number;
 }
 
 export interface RouteRow {
@@ -110,6 +124,7 @@ export interface RouteRow {
   vehicle_id?: number | null;
   vehicle_code?: string | null;
   student_count?: number | string;
+  fee_slabs?: RouteFeeSlabRow[];
 }
 
 export function mapRoute(row: RouteRow) {
@@ -122,7 +137,14 @@ export function mapRoute(row: RouteRow) {
     fee: Number(row.fee ?? 0),
     vehicleId: row.vehicle_id ?? null,
     vehicle: row.vehicle_code ?? 'Not assigned',
-    students: Number(row.student_count ?? 0)
+    students: Number(row.student_count ?? 0),
+    // Distance slabs, nearest first. Empty means the route bills its flat `fee`.
+    slabs: (row.fee_slabs ?? []).map(slab => ({
+      slabId: slab.id,
+      minKm: Number(slab.min_km),
+      maxKm: Number(slab.max_km),
+      fee: Number(slab.fee)
+    }))
   };
 }
 

@@ -84,11 +84,51 @@ Stores transport routes and their monthly fee.
 | `route_code` | Unique user-facing route identifier |
 | `name` | Route name |
 | `description` | Optional route description |
-| `fee` | Monthly transport fee |
+| `fee` | Flat fee, used only when the route has no slabs |
 | `vehicle_id` | Optional assigned vehicle |
 
-The current route fee is used when generating a monthly fee due. Existing
-generated dues retain their own billed amount even if the route fee changes.
+### `route_fee_slabs`
+
+Prisma model: `RouteFeeSlab`.
+
+The distance bands a route is priced in. The route stays **one row** and one
+physical bus run; a slab has no identity of its own — its code, name and vehicle
+are read from its parent route.
+
+| Column | Description |
+| --- | --- |
+| `route_id` | Owning route, `ON DELETE CASCADE` |
+| `min_km` / `max_km` | The band's distance range, both inclusive |
+| `fee` | Charge for a student assigned to this slab |
+
+A student assignment records **both** the route and the slab
+(`student_route_assignments.slab_id`):
+
+- the **route** is where the bus, driver, roster, attendance and every existing
+  join already hang, so none of them change when slabs are introduced;
+- the **slab** is what decides the fee.
+
+Rules to preserve:
+
+- **Slabs must not overlap** within a route. `RouteService.parseSlabs` rejects
+  overlaps and `uq_route_fee_slabs_route_min` stops duplicates at the database;
+  with overlapping slabs the fee for a distance is ambiguous.
+- **Editing slabs preserves rows students are billed on.** `replaceSlabs` matches
+  an existing slab by its starting kilometre and updates it in place. Deleting
+  and recreating would change the slab id under every assignment pointing at it,
+  which is the entire link between a student and their fee.
+- **A slab in use cannot be removed.** `ON DELETE RESTRICT` on
+  `fk_student_route_slab`, and `replaceSlabs` refuses with an explanation rather
+  than a foreign-key error. Move those students first.
+- **A slab must belong to the route being assigned.** `resolveSlabId` rejects a
+  slab from another route — it would bill a fee unrelated to the bus ridden.
+- **`slab_id` is nullable** and means the route is unbanded: the student falls
+  back to `routes.fee`, exactly how billing worked before slabs existed.
+- **Ambiguity is refused, not guessed.** Assigning without a `slabId` to a route
+  with several slabs is a 400; with one slab it picks that one.
+
+`students.distance_km` (written by student import's `parseSlabKm`) is only a hint
+for choosing a slab in the UI. It does not decide the fee — the assignment does.
 
 ## Assignment Tables
 
@@ -219,9 +259,13 @@ use `SET NULL` where configured.
 
 ## Monthly Fee Flow
 
-1. Assign a student to a route with a positive fee.
-2. Generate dues for a month using `POST /api/fee-dues/generate`.
-3. The backend creates one `fee_dues` row per eligible student.
+1. Define a route, then its distance slabs and their fees.
+2. Assign a student to that route **and** to one of its slabs.
+3. Generate dues for a period using `POST /api/fee-dues/generate`.
+4. The backend bills each student their slab's fee — or the route's flat `fee`
+   when the route has no slabs — and creates one `fee_dues` row per eligible
+   student. A student whose fee resolves to zero is skipped and counted in the
+   response.
 4. Record a payment using `studentId` and `dueId`.
 5. The payment transaction updates the linked due automatically.
 6. Admin reports and the parent app read the same persisted ledger.

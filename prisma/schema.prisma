@@ -154,10 +154,35 @@ model TransportRoute {
   vehicle            Vehicle?                 @relation(fields: [vehicleId], references: [id], onDelete: SetNull, map: "fk_routes_vehicle")
   studentAssignments StudentRouteAssignment[]
   feeDues            FeeDue[]
+  /// Distance bands this route is priced in. Empty means the route bills the
+  /// flat `fee` above.
+  feeSlabs           RouteFeeSlab[]
 
   @@index([name], map: "idx_routes_name")
   @@index([vehicleId], map: "idx_routes_vehicle")
   @@map("routes")
+}
+
+/// A distance band of a route, and the fee charged inside it.
+///
+/// The route stays one row and one physical bus run; a slab has no identity of
+/// its own — its code, name and vehicle are read from `route`. A student
+/// assignment records the route *and* the slab: the route is where the bus,
+/// driver, roster and attendance hang, the slab is what decides the fee.
+model RouteFeeSlab {
+  id          Int                      @id @default(autoincrement()) @db.UnsignedInt
+  routeId     Int                      @map("route_id") @db.UnsignedInt
+  minKm       Decimal                  @map("min_km") @db.Decimal(8, 2)
+  maxKm       Decimal                  @map("max_km") @db.Decimal(8, 2)
+  fee         Decimal                  @default(0) @db.Decimal(10, 2)
+  createdAt   DateTime                 @default(now()) @map("created_at")
+  updatedAt   DateTime                 @updatedAt @map("updated_at")
+  route       TransportRoute           @relation(fields: [routeId], references: [id], onDelete: Cascade, map: "fk_route_fee_slabs_route")
+  assignments StudentRouteAssignment[]
+
+  @@unique([routeId, minKm], map: "uq_route_fee_slabs_route_min")
+  @@index([routeId, maxKm], map: "idx_route_fee_slabs_lookup")
+  @@map("route_fee_slabs")
 }
 
 model DriverVehicleAssignment {
@@ -205,8 +230,14 @@ model StudentRouteAssignment {
   student      Student        @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_student_route_student")
   route        TransportRoute @relation(fields: [routeId], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_student_route_route")
 
+  /// Which distance band of `route` this student is billed on. NULL means the
+  /// route is unbanded and the student falls back to `routes.fee`.
+  slabId       Int?          @map("slab_id") @db.UnsignedInt
+  slab         RouteFeeSlab? @relation(fields: [slabId], references: [id], onDelete: Restrict, map: "fk_student_route_slab")
+
   @@index([routeId, unassignedAt], map: "idx_student_route_active_route")
   @@index([studentId, unassignedAt], map: "idx_student_route_active_student")
+  @@index([slabId], map: "idx_student_route_slab")
   @@map("student_route_assignments")
 }
 

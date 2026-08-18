@@ -6,7 +6,7 @@ import { Body, requiredOrExisting } from '../validators.js';
 const allowedActions = new Set(['Pickup', 'Drop']);
 
 export class TransportLogService {
-  static async list(filters: { studentId?: string; studentIds?: number[]; from?: string; to?: string }) {
+  static async list(filters: { studentId?: string; studentIds?: number[]; driverId?: string; from?: string; to?: string }) {
     const where: Prisma.TransportLogWhereInput = {};
     if (filters.studentId) {
       const studentId = Number(filters.studentId);
@@ -15,6 +15,11 @@ export class TransportLogService {
     }
     if (filters.studentIds) {
       where.studentId = { in: filters.studentIds };
+    }
+    if (filters.driverId) {
+      const driverId = Number(filters.driverId);
+      if (!Number.isInteger(driverId) || driverId <= 0) throw new ApiError(400, 'driverId filter must be a positive integer');
+      where.driverId = driverId;
     }
     if (filters.from || filters.to) {
       where.recordedAt = {};
@@ -89,6 +94,7 @@ function parseDate(value: unknown, label: string) {
 function mapTransportLog(row: {
   id: number;
   studentId: number;
+  driverId?: number | null;
   action: string;
   recordedAt: Date;
   latitude: Prisma.Decimal | number | string;
@@ -100,6 +106,7 @@ function mapTransportLog(row: {
     id: row.id,
     studentId: row.studentId,
     student: row.student?.fullName ?? '',
+    driverId: row.driverId ?? null,
     action: row.action,
     recordedAt: row.recordedAt.toISOString(),
     latitude: Number(row.latitude),

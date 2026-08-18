@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { ApiError } from '../errors.js';
 import { prisma } from '../prisma.js';
 import { toDriverStatus } from './driver.model.js';
 
@@ -11,6 +12,9 @@ export interface AssignDriverPayload {
 export interface AssignStudentPayload {
   studentId: number;
   routeIdentifier: unknown;
+  // Which distance slab of that route the student is billed on. Undefined means
+  // "pick the only one" for a single-slab route; null means explicitly none.
+  slabId?: number | null;
   pickupOrder: number | null;
   notes: string | null;
 }
@@ -168,6 +172,7 @@ export class AssignmentModel {
     const assignment = await prisma.$transaction(async tx => {
       const route = await resolveRoute(payload.routeIdentifier, tx);
       await tx.student.findUniqueOrThrow({ where: { id: payload.studentId }, select: { id: true } });
+      const slabId = await resolveSlabId(tx, route.id, payload.slabId);
 
       await tx.studentRouteAssignment.updateMany({
         where: { studentId: payload.studentId, unassignedAt: null },
@@ -184,6 +189,7 @@ export class AssignmentModel {
         data: {
           studentId: payload.studentId,
           routeId: route.id,
+          slabId,
           pickupOrder: payload.pickupOrder,
           notes: payload.notes
         }
@@ -337,6 +343,34 @@ async function resolveRoute(identifier: unknown, tx: any) {
     return tx.transportRoute.findUniqueOrThrow({ where: { id: Number(value) }, select: { id: true } });
   }
   return tx.transportRoute.findUniqueOrThrow({ where: { routeCode: value }, select: { id: true } });
+}
+
+/**
+ * Which distance slab of a route a student is billed on.
+ *
+ * A slab must belong to the route being assigned — accepting one from another
+ * route would bill the student a fee unrelated to the bus they ride.
+ *
+ * When the caller does not name a slab: an unbanded route gets none (the student
+ * falls back to `routes.fee`), a single-slab route gets that one, and a route
+ * with several is rejected rather than guessed at, since picking the wrong band
+ * silently charges a real family the wrong amount.
+ */
+async function resolveSlabId(tx: any, routeId: number, slabId: number | null | undefined) {
+  if (slabId === null) return null;
+
+  if (slabId !== undefined) {
+    const slab = await tx.routeFeeSlab.findUnique({ where: { id: slabId }, select: { id: true, routeId: true } });
+    if (!slab) throw new ApiError(404, 'Distance slab not found');
+    if (slab.routeId !== routeId) throw new ApiError(400, 'That distance slab belongs to a different route');
+    return slab.id;
+  }
+
+  const slabs = await tx.routeFeeSlab.findMany({ where: { routeId }, select: { id: true, minKm: true, maxKm: true } });
+  if (slabs.length === 0) return null;
+  if (slabs.length === 1) return slabs[0].id;
+  const ranges = slabs.map((slab: any) => `${Number(slab.minKm)}-${Number(slab.maxKm)} km`).join(', ');
+  throw new ApiError(400, `This route has several distance slabs (${ranges}). Pick one with slabId.`);
 }
 
 function describeAssignmentError(error: unknown) {

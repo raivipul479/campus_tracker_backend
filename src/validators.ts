@@ -100,6 +100,14 @@ export function validatePhone(value: string, label = 'phone') {
   return `+${digits}`;
 }
 
+// Route codes come from the transport spreadsheet, where a suffix after a space
+// is normal ("B-19 PRE" for the pre-primary run on route B-19). Both write paths
+// — the admin form and student import — normalize through here so "B-19  PRE "
+// and "B-19 PRE" cannot become two separate routes.
+export function normalizeRouteCode(value: string) {
+  return value.trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
 export function validateVehicleCode(value: string) {
   return validateText(value.toUpperCase(), 'vehicle code', {
     min: 3,

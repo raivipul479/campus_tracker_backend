@@ -84,6 +84,8 @@ export class VehicleModel {
 
   static async findRoster(vehicleId: number) {
     const assignments = await prisma.studentRouteAssignment.findMany({
+      // Slabs price a route, they do not replace it: a student assignment still
+      // records the route itself, so the roster is unchanged by slabs.
       where: { route: { vehicleId }, unassignedAt: null },
       include: { student: true, route: { include: { vehicle: true } } },
       orderBy: [{ pickupOrder: 'asc' }, { student: { fullName: 'asc' } }]

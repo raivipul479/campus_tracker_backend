@@ -1,5 +1,5 @@
 import { FeeDueStatus, Prisma } from '@prisma/client';
-import { ApiError } from '../errors.js';
+import { ApiError, isMissingTable } from '../errors.js';
 import { prisma } from '../prisma.js';
 import { Body, optionalBoundedNumber, optionalString, positiveId } from '../validators.js';
 
@@ -24,17 +24,7 @@ export class FeeDueService {
       ? null
       : positiveId(studentIdRaw, 'studentId');
 
-    const students = await prisma.student.findMany({
-      where: studentId ? { id: studentId } : undefined,
-      include: {
-        routeAssignments: {
-          where: { unassignedAt: null },
-          include: { route: true },
-          take: 1
-        }
-      },
-      orderBy: { fullName: 'asc' }
-    });
+    const students = await studentsForBilling(studentId);
     if (studentId && students.length === 0) throw new ApiError(404, 'Student not found');
 
     let created = 0;
@@ -44,7 +34,9 @@ export class FeeDueService {
     for (const student of students) {
       const assignment = student.routeAssignments[0];
       const route = assignment?.route;
-      const baseAmount = Number(route?.fee ?? 0);
+      // The slab the student was assigned to is what they pay. A route with no
+      // slabs bills its flat fee — exactly how this worked before slabs existed.
+      const baseAmount = assignment?.slab ? Number(assignment.slab.fee) : Number(route?.fee ?? 0);
       if (!route || baseAmount <= 0) {
         skipped += 1;
         continue;
@@ -250,6 +242,21 @@ function statusFor(balance: number, paidAmount: number, total: number): FeeDueSt
   if (balance <= 0) return 'Paid';
   if (paidAmount > 0) return 'Partial';
   return 'Pending';
+}
+
+/** Students with the route and distance slab they are actively assigned to. */
+async function studentsForBilling(studentId: number | null) {
+  return prisma.student.findMany({
+    where: studentId ? { id: studentId } : undefined,
+    include: {
+      routeAssignments: {
+        where: { unassignedAt: null },
+        include: { route: true, slab: true },
+        take: 1
+      }
+    },
+    orderBy: { fullName: 'asc' }
+  });
 }
 
 // Fees are billed per QUARTER: a route's `fee` is one quarter's charge, and a

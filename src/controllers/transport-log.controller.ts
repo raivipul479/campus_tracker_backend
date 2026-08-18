@@ -6,6 +6,7 @@ export class TransportLogController {
   static async list(req: Request, res: Response) {
     res.json(await TransportLogService.list({
       studentId: req.query.studentId ? String(req.query.studentId) : undefined,
+      driverId: req.query.driverId ? String(req.query.driverId) : undefined,
       from: req.query.from ? String(req.query.from) : undefined,
       to: req.query.to ? String(req.query.to) : undefined
     }));
