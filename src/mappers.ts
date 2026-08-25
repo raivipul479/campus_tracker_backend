@@ -30,6 +30,7 @@ export interface StudentRow {
   branch: string | null;
   phone: string;
   secondary_phone: string | null;
+  email?: string | null;
   vehicle_code?: string | null;
   vehicle_id?: number | null;
   route_id?: number | null;
@@ -93,6 +94,7 @@ export function mapStudent(row: StudentRow) {
     branch: row.branch ?? '',
     phone: row.phone,
     secondaryPhone: row.secondary_phone ?? '',
+    email: row.email ?? '',
     vehicleId: row.vehicle_id ?? null,
     vehicle: row.vehicle_code ?? 'Unassigned',
     routeId: row.route_id ?? null,

@@ -169,7 +169,8 @@ Stores one authoritative monthly fee record per student.
 | --- | --- |
 | `student_id` | Student owing the fee |
 | `route_id` | Route used when the due was generated |
-| `month` | Billing month in `YYYY-MM` format |
+| `month` | Billing quarter, `YYYY-Qn` (see the fee flow below) |
+| `due_date` | When the due is payable. `generated_at` is when it was raised — a different thing |
 | `base_amount` | Route fee captured at generation time |
 | `discount` | Discount or concession |
 | `fine` | Late fee or adjustment |
@@ -199,7 +200,9 @@ Stores payment receipts.
 | `plan` | Monthly, quarterly, annual, or other plan |
 | `amount` | Received amount |
 | `paid_on` | Payment date |
+| `paid_time` | Clock time, `CHAR(8)`. Separate from `paid_on` so existing date-range reports keep behaving, mirroring the fee sheet's two columns |
 | `method` | UPI, card, cash, or bank transfer |
+| `reference_number` | The fee gateway's own receipt, stored as given. UNIQUE — it is the idempotency key for sheet import |
 | `status` | Paid, Collected, Pending, or Overdue |
 
 When a `Paid` or `Collected` payment is linked to a due, the backend recomputes
@@ -207,6 +210,38 @@ When a `Paid` or `Collected` payment is linked to a due, the backend recomputes
 the same transaction. It never increments a trusted running total. A single
 `due_id` only supports a monthly payment; multi-month plans are rejected when a
 due is supplied until a `payment_due_allocations` ledger is implemented.
+
+### Fee summary sheet (import / export)
+
+`services/fee-sheet.ts` owns the office's own fee sheet format — the layout the
+fee gateway produces — and both directions share it so a column cannot mean one
+thing going out and another coming back.
+
+`GET /api/fee-dues/sheet/export` writes it; `POST /api/fee-dues/sheet/import`
+reads it, raising the dues a sheet describes and then recording its payments.
+
+Rules to preserve:
+
+- **Import never writes `paid_amount`, `balance` or `status` directly.** It
+  writes the billed figures and the payments, then calls `reconcileDuePayments`,
+  which derives the rest from the payments that actually exist. This is the
+  invariant that keeps a balance honest.
+- **`reference_number` is the idempotency key.** Re-importing the same sheet
+  updates the matching payment instead of paying a due twice.
+- **A row is matched to a student by name, narrowed by Standard/Course.** The
+  sheet carries no registration number and masks Mobile Number (`*******20`).
+  An ambiguous or missing match is **rejected**, never guessed — a wrong guess
+  bills a real family for another child.
+- **Mobile Number is never written back**, for the same masking reason: the
+  stored number is what the parent app logs in with.
+- **Fee Head and Fees Category are derived**, not stored. `month` already holds
+  the quarter, and `2026-Q2` is the sheet's "2nd Quarter Fee".
+- **Institute and Branch are not stored.** They are constant for the deployment
+  and are left blank on export rather than duplicated onto every student.
+- Dates are day-first (`15/07/2026`, `05/08/26`) and parsed as UTC midnight so a
+  date never shifts across the server's timezone.
+- Each row imports in its own transaction, so one bad row does not lose a
+  thousand good ones. Rejects come back with row number and reason.
 
 ## Transport History
 

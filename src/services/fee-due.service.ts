@@ -226,6 +226,7 @@ function mapDue(row: any) {
     route: row.route?.routeCode ?? '',
     routeName: row.route?.name ?? '',
     month: row.month,
+    dueDate: row.dueDate ? row.dueDate.toISOString().slice(0, 10) : null,
     baseAmount: Number(row.baseAmount),
     discount: Number(row.discount),
     fine: Number(row.fine),

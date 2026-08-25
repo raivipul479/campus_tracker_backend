@@ -17,6 +17,7 @@ export interface StudentPayload {
   branch: string | null;
   phone: string;
   secondaryPhone: string | null;
+  email: string | null;
 }
 
 export class StudentModel {
@@ -114,7 +115,8 @@ export class StudentModel {
         onHold: payload.onHold,
         branch: (payload.branch as any) ?? null,
         phone: payload.phone,
-        secondaryPhone: payload.secondaryPhone
+        secondaryPhone: payload.secondaryPhone,
+        email: payload.email
       },
       include: activeVehicleInclude()
     });
@@ -139,7 +141,8 @@ export class StudentModel {
         onHold: payload.onHold,
         branch: (payload.branch as any) ?? null,
         phone: payload.phone,
-        secondaryPhone: payload.secondaryPhone
+        secondaryPhone: payload.secondaryPhone,
+        email: payload.email
       },
       include: activeVehicleInclude()
     });
@@ -190,6 +193,7 @@ function mapStudentRecord(student: any): StudentRow {
     branch: student.branch ?? null,
     phone: student.phone,
     secondary_phone: student.secondaryPhone,
+    email: student.email ?? null,
     vehicle_id: vehicle?.id ?? null,
     vehicle_code: vehicle?.vehicleCode ?? null,
     route_id: route?.id ?? null,

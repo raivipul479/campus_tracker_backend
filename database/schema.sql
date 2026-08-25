@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS students (
   branch ENUM('JPC', 'JPIC') NULL,
   phone VARCHAR(32) NOT NULL,
   secondary_phone VARCHAR(32) NULL,
+  -- The fee sheet's E-Mail Address. Not unique: siblings share a parent's.
+  email VARCHAR(190) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -182,6 +184,8 @@ CREATE TABLE IF NOT EXISTS fee_dues (
   student_id INT UNSIGNED NOT NULL,
   route_id INT UNSIGNED NULL,
   month VARCHAR(7) NOT NULL,
+  -- When the due is payable; generated_at is when it was raised.
+  due_date DATE NULL,
   base_amount DECIMAL(10,2) NOT NULL,
   discount DECIMAL(10,2) NOT NULL DEFAULT 0,
   fine DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -207,12 +211,20 @@ CREATE TABLE IF NOT EXISTS payments (
   plan VARCHAR(80) NOT NULL,
   amount DECIMAL(10,2) NOT NULL,
   paid_on DATE NOT NULL,
+  -- Clock time, kept out of paid_on so existing date-range reports keep
+  -- behaving. CHAR(8) rather than TIME: Prisma maps TIME to DateTime and hands
+  -- back 1970-01-01T15:26:00Z, inviting a timezone bug on every read.
+  paid_time CHAR(8) NULL,
   method VARCHAR(40) NOT NULL,
+  -- The fee gateway's own receipt, stored as given. UNIQUE so re-importing a
+  -- sheet updates rather than duplicating; many NULLs are allowed.
+  reference_number VARCHAR(64) NULL,
   status ENUM('Paid', 'Collected', 'Pending', 'Overdue') NOT NULL DEFAULT 'Pending',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_payments_receipt_id (receipt_id),
+  UNIQUE KEY uq_payments_reference_number (reference_number),
   KEY idx_payments_student (student_id),
   KEY idx_payments_due (due_id),
   KEY idx_payments_paid_on (paid_on),

@@ -89,6 +89,15 @@ function studentPayload(data: Body, existing?: StudentRow) {
   if (section) validateText(section, 'section', { max: 16 });
   if (guardianName) validateText(guardianName, "father's / mother's name", { max: 160 });
   if (address) validateText(address, 'address', { max: 255 });
+  // The fee sheet's E-Mail Address. Not validated beyond shape and length —
+  // siblings share a parent's address, and rejecting an odd-looking one would
+  // block importing a sheet the office already treats as correct.
+  const emailInput = optionalString(data, ['email']) ?? existing?.email ?? null;
+  const email = emailInput ? emailInput.trim() : null;
+  if (email) {
+    validateText(email, 'email', { max: 190 });
+    if (!email.includes('@')) throw new ApiError(400, 'email must contain @');
+  }
   return {
     serialNumber,
     registrationNumber,
@@ -103,7 +112,8 @@ function studentPayload(data: Body, existing?: StudentRow) {
     onHold,
     branch,
     phone,
-    secondaryPhone
+    secondaryPhone,
+    email
   };
 }
 

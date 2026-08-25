@@ -37,6 +37,8 @@ model Student {
   branch             StudentBranch?
   phone              String                      @db.VarChar(32)
   secondaryPhone     String?                     @map("secondary_phone") @db.VarChar(32)
+  /// The fee sheet's "E-Mail Address". Not unique: siblings share a parent's.
+  email              String?                     @db.VarChar(190)
   createdAt          DateTime                    @default(now()) @map("created_at")
   updatedAt          DateTime                    @updatedAt @map("updated_at")
   vehicleAssignments StudentVehicleAssignment[]
@@ -60,7 +62,14 @@ model Payment {
   plan      String        @db.VarChar(80)
   amount    Decimal      @db.Decimal(10, 2)
   paidOn    DateTime     @map("paid_on") @db.Date
+  /// Clock time of payment, kept separate from paidOn so existing date-range
+  /// reports and their BETWEEN filters keep behaving. Mirrors the fee sheet,
+  /// which also splits date and time into two columns.
+  paidTime  String?      @map("paid_time") @db.VarChar(8)
   method    String       @db.VarChar(40)
+  /// The gateway's own receipt ("Q4VFQEYWS521324"), stored exactly as given.
+  /// Unique so re-importing a sheet updates instead of duplicating.
+  referenceNumber String? @unique(map: "uq_payments_reference_number") @map("reference_number") @db.VarChar(64)
   status    PaymentStatus @default(Pending)
   createdAt DateTime     @default(now()) @map("created_at")
   updatedAt DateTime     @updatedAt @map("updated_at")
@@ -79,6 +88,9 @@ model FeeDue {
   studentId Int         @map("student_id") @db.UnsignedInt
   routeId   Int?        @map("route_id") @db.UnsignedInt
   month     String      @db.VarChar(7)
+  /// When the due is payable. `generatedAt` is when it was raised, which is a
+  /// different thing and cannot stand in for it.
+  dueDate   DateTime?   @map("due_date") @db.Date
   baseAmount Decimal    @map("base_amount") @db.Decimal(10, 2)
   discount  Decimal     @default(0) @db.Decimal(10, 2)
   fine      Decimal     @default(0) @db.Decimal(10, 2)
