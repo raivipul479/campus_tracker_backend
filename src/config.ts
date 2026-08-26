@@ -44,6 +44,15 @@ export const config = {
     defaultSuperAdminPassword: superAdminPassword,
     defaultSuperAdminName: process.env.SUPER_ADMIN_NAME ?? 'Super Admin'
   },
+  gps: {
+    // Proxied server-side: the provider sends no CORS headers, and this
+    // credential must not reach the browser bundle.
+    baseUrl: process.env.GPS_API_BASE_URL ?? '',
+    username: process.env.GPS_API_USERNAME ?? '',
+    timeoutMs: numberFromEnv('GPS_API_TIMEOUT_MS', 10000),
+    // The provider rejects a second call inside a minute, so never go below it.
+    cacheMs: numberFromEnv('GPS_API_CACHE_MS', 60000)
+  },
   db: {
     host: process.env.DB_HOST ?? '127.0.0.1',
     port: numberFromEnv('DB_PORT', 3306),
