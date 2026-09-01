@@ -253,3 +253,28 @@ CREATE TABLE IF NOT EXISTS transport_logs (
     FOREIGN KEY (driver_id) REFERENCES drivers(id)
     ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS vehicle_positions (
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  vehicle_no   VARCHAR(32)     NOT NULL,
+  vehicle_id   INT UNSIGNED    NULL,
+  latitude     DECIMAL(10, 7)  NOT NULL,
+  longitude    DECIMAL(10, 7)  NOT NULL,
+  speed        DECIMAL(6, 2)   NOT NULL DEFAULT 0,
+  ignition     TINYINT(1)      NOT NULL DEFAULT 0,
+  direction    SMALLINT UNSIGNED NULL,
+  status       VARCHAR(32)     NULL,
+  odometer     DECIMAL(12, 4)  NULL,
+  gps_duration BIGINT UNSIGNED NULL,
+  imei         VARCHAR(32)     NULL,
+  -- The provider's own clock, in UTC. fetched_at is ours.
+  reported_at  DATETIME(3)     NOT NULL,
+  fetched_at   DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_vehicle_positions_no_time (vehicle_no, reported_at),
+  KEY idx_vehicle_positions_no_time (vehicle_no, reported_at),
+  KEY idx_vehicle_positions_vehicle (vehicle_id),
+  KEY idx_vehicle_positions_reported (reported_at),
+  CONSTRAINT fk_vehicle_positions_vehicle
+    FOREIGN KEY (vehicle_id) REFERENCES vehicles (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

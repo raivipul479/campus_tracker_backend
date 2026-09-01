@@ -11,6 +11,10 @@ export class ParentPortalController {
     res.json(await ParentPortalService.vehicles(req.scopedSession!.phone));
   }
 
+  static async vehiclePositions(req: Request, res: Response) {
+    res.json(await ParentPortalService.vehiclePositions(req.scopedSession!.phone));
+  }
+
   static async feeDues(req: Request, res: Response) {
     res.json(await ParentPortalService.feeDues(req.scopedSession!.phone, req.query.month ? String(req.query.month) : undefined));
   }

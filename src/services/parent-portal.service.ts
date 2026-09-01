@@ -4,6 +4,7 @@ import { VehicleService } from './vehicle.service.js';
 import { FeeDueService } from './fee-due.service.js';
 import { PaymentService } from './payment.service.js';
 import { TransportLogService } from './transport-log.service.js';
+import { GpsService } from './gps.service.js';
 
 async function childrenFor(phone: string) {
   return StudentService.list({ phone });
@@ -25,6 +26,20 @@ export class ParentPortalService {
     if (!vehicleIds.size) return [];
     const allVehicles = await VehicleService.list({});
     return allVehicles.filter(vehicle => vehicleIds.has(vehicle.vehicleId as number));
+  }
+
+  /**
+   * Live position of the bus this parent's children ride, and no other.
+   *
+   * Deliberately not the fleet-wide GPS endpoint: a parent has no business
+   * seeing where other people's children are being carried.
+   */
+  static async vehiclePositions(phone: string) {
+    const vehicles = await ParentPortalService.vehicles(phone);
+    const vehicleIds = vehicles
+      .map(vehicle => vehicle.vehicleId as number)
+      .filter((id): id is number => Boolean(id));
+    return GpsService.forVehicleIds(vehicleIds);
   }
 
   static async feeDues(phone: string, month?: string) {

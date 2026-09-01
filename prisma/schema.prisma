@@ -22,25 +22,25 @@ model SuperAdmin {
 }
 
 model Student {
-  id                 Int                         @id @default(autoincrement()) @db.UnsignedInt
-  serialNumber       String?                     @map("serial_number") @db.VarChar(32)
-  registrationNumber String                      @unique(map: "uq_students_registration_number") @map("registration_number") @db.VarChar(64)
-  fullName           String                      @map("full_name") @db.VarChar(160)
-  className          String                      @map("class_name") @db.VarChar(80)
-  section            String?                     @db.VarChar(16)
-  guardianName       String?                     @map("guardian_name") @db.VarChar(160)
-  distanceKm         Decimal?                    @map("distance_km") @db.Decimal(8, 2)
-  tagNo              String?                     @unique(map: "uq_students_tag_no") @map("tag_no") @db.VarChar(32)
-  area               String                      @db.VarChar(180)
-  address            String?                     @db.VarChar(255)
-  onHold             Boolean                     @default(false) @map("on_hold")
+  id                 Int                        @id @default(autoincrement()) @db.UnsignedInt
+  serialNumber       String?                    @map("serial_number") @db.VarChar(32)
+  registrationNumber String                     @unique(map: "uq_students_registration_number") @map("registration_number") @db.VarChar(64)
+  fullName           String                     @map("full_name") @db.VarChar(160)
+  className          String                     @map("class_name") @db.VarChar(80)
+  section            String?                    @db.VarChar(16)
+  guardianName       String?                    @map("guardian_name") @db.VarChar(160)
+  distanceKm         Decimal?                   @map("distance_km") @db.Decimal(8, 2)
+  tagNo              String?                    @unique(map: "uq_students_tag_no") @map("tag_no") @db.VarChar(32)
+  area               String                     @db.VarChar(180)
+  address            String?                    @db.VarChar(255)
+  onHold             Boolean                    @default(false) @map("on_hold")
   branch             StudentBranch?
-  phone              String                      @db.VarChar(32)
-  secondaryPhone     String?                     @map("secondary_phone") @db.VarChar(32)
+  phone              String                     @db.VarChar(32)
+  secondaryPhone     String?                    @map("secondary_phone") @db.VarChar(32)
   /// The fee sheet's "E-Mail Address". Not unique: siblings share a parent's.
-  email              String?                     @db.VarChar(190)
-  createdAt          DateTime                    @default(now()) @map("created_at")
-  updatedAt          DateTime                    @updatedAt @map("updated_at")
+  email              String?                    @db.VarChar(190)
+  createdAt          DateTime                   @default(now()) @map("created_at")
+  updatedAt          DateTime                   @updatedAt @map("updated_at")
   vehicleAssignments StudentVehicleAssignment[]
   routeAssignments   StudentRouteAssignment[]
   payments           Payment[]
@@ -54,27 +54,27 @@ model Student {
 }
 
 model Payment {
-  id        Int           @id @default(autoincrement()) @db.UnsignedInt
-  receiptId String        @unique(map: "uq_payments_receipt_id") @map("receipt_id") @db.VarChar(32)
-  studentId Int?          @map("student_id") @db.UnsignedInt
-  dueId     Int?          @map("due_id") @db.UnsignedInt
-  studentName String      @map("student_name") @db.VarChar(160)
-  plan      String        @db.VarChar(80)
-  amount    Decimal      @db.Decimal(10, 2)
-  paidOn    DateTime     @map("paid_on") @db.Date
+  id              Int           @id @default(autoincrement()) @db.UnsignedInt
+  receiptId       String        @unique(map: "uq_payments_receipt_id") @map("receipt_id") @db.VarChar(32)
+  studentId       Int?          @map("student_id") @db.UnsignedInt
+  dueId           Int?          @map("due_id") @db.UnsignedInt
+  studentName     String        @map("student_name") @db.VarChar(160)
+  plan            String        @db.VarChar(80)
+  amount          Decimal       @db.Decimal(10, 2)
+  paidOn          DateTime      @map("paid_on") @db.Date
   /// Clock time of payment, kept separate from paidOn so existing date-range
   /// reports and their BETWEEN filters keep behaving. Mirrors the fee sheet,
   /// which also splits date and time into two columns.
-  paidTime  String?      @map("paid_time") @db.VarChar(8)
-  method    String       @db.VarChar(40)
+  paidTime        String?       @map("paid_time") @db.VarChar(8)
+  method          String        @db.VarChar(40)
   /// The gateway's own receipt ("Q4VFQEYWS521324"), stored exactly as given.
   /// Unique so re-importing a sheet updates instead of duplicating.
-  referenceNumber String? @unique(map: "uq_payments_reference_number") @map("reference_number") @db.VarChar(64)
-  status    PaymentStatus @default(Pending)
-  createdAt DateTime     @default(now()) @map("created_at")
-  updatedAt DateTime     @updatedAt @map("updated_at")
-  student   Student?     @relation(fields: [studentId], references: [id], onDelete: SetNull, map: "fk_payments_student")
-  due       FeeDue?      @relation(fields: [dueId], references: [id], onDelete: SetNull, map: "fk_payments_due")
+  referenceNumber String?       @unique(map: "uq_payments_reference_number") @map("reference_number") @db.VarChar(64)
+  status          PaymentStatus @default(Pending)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  student         Student?      @relation(fields: [studentId], references: [id], onDelete: SetNull, map: "fk_payments_student")
+  due             FeeDue?       @relation(fields: [dueId], references: [id], onDelete: SetNull, map: "fk_payments_due")
 
   @@index([studentId], map: "idx_payments_student")
   @@index([dueId], map: "idx_payments_due")
@@ -84,24 +84,24 @@ model Payment {
 }
 
 model FeeDue {
-  id        Int          @id @default(autoincrement()) @db.UnsignedInt
-  studentId Int         @map("student_id") @db.UnsignedInt
-  routeId   Int?        @map("route_id") @db.UnsignedInt
-  month     String      @db.VarChar(7)
+  id          Int             @id @default(autoincrement()) @db.UnsignedInt
+  studentId   Int             @map("student_id") @db.UnsignedInt
+  routeId     Int?            @map("route_id") @db.UnsignedInt
+  month       String          @db.VarChar(7)
   /// When the due is payable. `generatedAt` is when it was raised, which is a
   /// different thing and cannot stand in for it.
-  dueDate   DateTime?   @map("due_date") @db.Date
-  baseAmount Decimal    @map("base_amount") @db.Decimal(10, 2)
-  discount  Decimal     @default(0) @db.Decimal(10, 2)
-  fine      Decimal     @default(0) @db.Decimal(10, 2)
-  paidAmount Decimal    @default(0) @map("paid_amount") @db.Decimal(10, 2)
-  balance   Decimal     @db.Decimal(10, 2)
-  status    FeeDueStatus @default(Pending)
-  generatedAt DateTime  @default(now()) @map("generated_at")
-  updatedAt DateTime    @updatedAt @map("updated_at")
-  student   Student     @relation(fields: [studentId], references: [id], onDelete: Restrict, map: "fk_fee_dues_student")
-  route     TransportRoute? @relation(fields: [routeId], references: [id], onDelete: SetNull, map: "fk_fee_dues_route")
-  payments  Payment[]
+  dueDate     DateTime?       @map("due_date") @db.Date
+  baseAmount  Decimal         @map("base_amount") @db.Decimal(10, 2)
+  discount    Decimal         @default(0) @db.Decimal(10, 2)
+  fine        Decimal         @default(0) @db.Decimal(10, 2)
+  paidAmount  Decimal         @default(0) @map("paid_amount") @db.Decimal(10, 2)
+  balance     Decimal         @db.Decimal(10, 2)
+  status      FeeDueStatus    @default(Pending)
+  generatedAt DateTime        @default(now()) @map("generated_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  student     Student         @relation(fields: [studentId], references: [id], onDelete: Restrict, map: "fk_fee_dues_student")
+  route       TransportRoute? @relation(fields: [routeId], references: [id], onDelete: SetNull, map: "fk_fee_dues_route")
+  payments    Payment[]
 
   @@unique([studentId, month], map: "uq_fee_dues_student_month")
   @@index([month, status], map: "idx_fee_dues_month_status")
@@ -128,30 +128,62 @@ model Driver {
 }
 
 model Vehicle {
-  id                 Int                         @id @default(autoincrement()) @db.UnsignedInt
-  vehicleCode        String                      @unique(map: "uq_vehicles_code") @map("vehicle_code") @db.VarChar(32)
-  registrationNumber String                      @unique(map: "uq_vehicles_registration_number") @map("registration_number") @db.VarChar(64)
-  route              String?                     @db.VarChar(120)
+  id                 Int                        @id @default(autoincrement()) @db.UnsignedInt
+  vehicleCode        String                     @unique(map: "uq_vehicles_code") @map("vehicle_code") @db.VarChar(32)
+  registrationNumber String                     @unique(map: "uq_vehicles_registration_number") @map("registration_number") @db.VarChar(64)
+  route              String?                    @db.VarChar(120)
   status             VehicleStatus              @default(Offline)
-  speedKmh           Decimal                     @default(0) @map("speed_kmh") @db.Decimal(8, 2)
-  mapX               Decimal                     @default(50) @map("map_x") @db.Decimal(5, 2)
-  mapY               Decimal                     @default(50) @map("map_y") @db.Decimal(5, 2)
-  vehicleType        VehicleType                 @default(Bus) @map("vehicle_type")
-  fuelType           FuelType                    @default(Diesel) @map("fuel_type")
-  seatingCapacity    Int?                        @map("seating_capacity") @db.UnsignedSmallInt
-  chassisNumber      String?                     @unique(map: "uq_vehicles_chassis_number") @map("chassis_number") @db.VarChar(64)
-  insuranceExpiry    DateTime?                   @map("insurance_expiry") @db.Date
-  fitnessExpiry      DateTime?                   @map("fitness_expiry") @db.Date
-  pucExpiry          DateTime?                   @map("puc_expiry") @db.Date
-  permitExpiry       DateTime?                   @map("permit_expiry") @db.Date
-  createdAt          DateTime                    @default(now()) @map("created_at")
-  updatedAt          DateTime                    @updatedAt @map("updated_at")
+  speedKmh           Decimal                    @default(0) @map("speed_kmh") @db.Decimal(8, 2)
+  mapX               Decimal                    @default(50) @map("map_x") @db.Decimal(5, 2)
+  mapY               Decimal                    @default(50) @map("map_y") @db.Decimal(5, 2)
+  vehicleType        VehicleType                @default(Bus) @map("vehicle_type")
+  fuelType           FuelType                   @default(Diesel) @map("fuel_type")
+  seatingCapacity    Int?                       @map("seating_capacity") @db.UnsignedSmallInt
+  chassisNumber      String?                    @unique(map: "uq_vehicles_chassis_number") @map("chassis_number") @db.VarChar(64)
+  insuranceExpiry    DateTime?                  @map("insurance_expiry") @db.Date
+  fitnessExpiry      DateTime?                  @map("fitness_expiry") @db.Date
+  pucExpiry          DateTime?                  @map("puc_expiry") @db.Date
+  permitExpiry       DateTime?                  @map("permit_expiry") @db.Date
+  createdAt          DateTime                   @default(now()) @map("created_at")
+  updatedAt          DateTime                   @updatedAt @map("updated_at")
   driverAssignments  DriverVehicleAssignment[]
   studentAssignments StudentVehicleAssignment[]
   routes             TransportRoute[]
+  positions          VehiclePosition[]
 
   @@index([status], map: "idx_vehicles_status")
   @@map("vehicles")
+}
+
+/// GPS positions polled from the provider and stored, so client reads are not
+/// tied to the provider's one-call-per-minute limit.
+model VehiclePosition {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  /// Provider registration number, normalised: no punctuation, uppercase.
+  vehicleNo   String   @map("vehicle_no") @db.VarChar(32)
+  /// Null when the provider reports a vehicle this school has no record of.
+  vehicleId   Int?     @map("vehicle_id") @db.UnsignedInt
+  latitude    Decimal  @db.Decimal(10, 7)
+  longitude   Decimal  @db.Decimal(10, 7)
+  speed       Decimal  @default(0) @db.Decimal(6, 2)
+  ignition    Boolean  @default(false)
+  direction   Int?     @db.UnsignedSmallInt
+  status      String?  @db.VarChar(32)
+  odometer    Decimal? @db.Decimal(12, 4)
+  gpsDuration BigInt?  @map("gps_duration") @db.UnsignedBigInt
+  imei        String?  @db.VarChar(32)
+  /// The provider's own clock. `fetchedAt` is ours.
+  reportedAt  DateTime @map("reported_at") @db.DateTime(3)
+  fetchedAt   DateTime @default(now()) @map("fetched_at") @db.DateTime(3)
+  vehicle     Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull, map: "fk_vehicle_positions_vehicle")
+
+  /// A parked bus repeats the same provider timestamp, so this keeps inserts
+  /// idempotent and stores movement rather than repetition.
+  @@unique([vehicleNo, reportedAt], map: "uq_vehicle_positions_no_time")
+  @@index([vehicleNo, reportedAt], map: "idx_vehicle_positions_no_time")
+  @@index([vehicleId], map: "idx_vehicle_positions_vehicle")
+  @@index([reportedAt], map: "idx_vehicle_positions_reported")
+  @@map("vehicle_positions")
 }
 
 model TransportRoute {
@@ -244,8 +276,8 @@ model StudentRouteAssignment {
 
   /// Which distance band of `route` this student is billed on. NULL means the
   /// route is unbanded and the student falls back to `routes.fee`.
-  slabId       Int?          @map("slab_id") @db.UnsignedInt
-  slab         RouteFeeSlab? @relation(fields: [slabId], references: [id], onDelete: Restrict, map: "fk_student_route_slab")
+  slabId Int?          @map("slab_id") @db.UnsignedInt
+  slab   RouteFeeSlab? @relation(fields: [slabId], references: [id], onDelete: Restrict, map: "fk_student_route_slab")
 
   @@index([routeId, unassignedAt], map: "idx_student_route_active_route")
   @@index([studentId, unassignedAt], map: "idx_student_route_active_student")
@@ -254,17 +286,17 @@ model StudentRouteAssignment {
 }
 
 model TransportLog {
-  id        Int              @id @default(autoincrement()) @db.UnsignedInt
-  studentId Int              @map("student_id") @db.UnsignedInt
-  driverId  Int?             @map("driver_id") @db.UnsignedInt
-  action    TransportLogType
-  recordedAt DateTime       @map("recorded_at")
-  latitude  Decimal         @db.Decimal(10, 7)
-  longitude Decimal         @db.Decimal(10, 7)
-  accuracy  Decimal         @default(0) @db.Decimal(8, 2)
-  createdAt DateTime        @default(now()) @map("created_at")
-  student   Student         @relation(fields: [studentId], references: [id], onDelete: Restrict, map: "fk_transport_logs_student")
-  driver    Driver?         @relation(fields: [driverId], references: [id], onDelete: SetNull, map: "fk_transport_logs_driver")
+  id         Int              @id @default(autoincrement()) @db.UnsignedInt
+  studentId  Int              @map("student_id") @db.UnsignedInt
+  driverId   Int?             @map("driver_id") @db.UnsignedInt
+  action     TransportLogType
+  recordedAt DateTime         @map("recorded_at")
+  latitude   Decimal          @db.Decimal(10, 7)
+  longitude  Decimal          @db.Decimal(10, 7)
+  accuracy   Decimal          @default(0) @db.Decimal(8, 2)
+  createdAt  DateTime         @default(now()) @map("created_at")
+  student    Student          @relation(fields: [studentId], references: [id], onDelete: Restrict, map: "fk_transport_logs_student")
+  driver     Driver?          @relation(fields: [driverId], references: [id], onDelete: SetNull, map: "fk_transport_logs_driver")
 
   @@index([studentId, recordedAt], map: "idx_transport_logs_student_date")
   @@index([driverId, recordedAt], map: "idx_transport_logs_driver_date")
@@ -326,13 +358,13 @@ enum TransportLogType {
 }
 
 model DeviceToken {
-  id        Int          @id @default(autoincrement()) @db.UnsignedInt
-  phone     String       @db.VarChar(32)
-  role      DeviceRole   @default(parent)
-  token     String       @unique(map: "uq_device_tokens_token") @db.VarChar(512)
-  platform  String       @default("android") @db.VarChar(20)
-  createdAt DateTime     @default(now()) @map("created_at")
-  updatedAt DateTime     @updatedAt @map("updated_at")
+  id        Int        @id @default(autoincrement()) @db.UnsignedInt
+  phone     String     @db.VarChar(32)
+  role      DeviceRole @default(parent)
+  token     String     @unique(map: "uq_device_tokens_token") @db.VarChar(512)
+  platform  String     @default("android") @db.VarChar(20)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
 
   @@index([phone], map: "idx_device_tokens_phone")
   @@map("device_tokens")

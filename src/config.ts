@@ -51,7 +51,10 @@ export const config = {
     username: process.env.GPS_API_USERNAME ?? '',
     timeoutMs: numberFromEnv('GPS_API_TIMEOUT_MS', 10000),
     // The provider rejects a second call inside a minute, so never go below it.
-    cacheMs: numberFromEnv('GPS_API_CACHE_MS', 60000)
+    // Above the provider's one-call-per-minute limit, with margin.
+    pollMs: numberFromEnv('GPS_POLL_MS', 66000),
+    pollEnabled: (process.env.GPS_POLL_ENABLED ?? 'true') !== 'false',
+    retentionDays: numberFromEnv('GPS_RETENTION_DAYS', 30)
   },
   db: {
     host: process.env.DB_HOST ?? '127.0.0.1',

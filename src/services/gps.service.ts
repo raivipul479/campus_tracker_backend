@@ -1,165 +1,170 @@
 import { ApiError } from '../errors.js';
-import { config } from '../config.js';
 import { prisma } from '../prisma.js';
+import { plateKey } from './gps-provider.js';
+import { GpsPoller } from './gps-poller.service.js';
 
 /**
- * Live vehicle positions from the GPS provider.
+ * Vehicle positions, read from what the poller stored.
  *
- * This is proxied rather than called from the browser for two reasons. The
- * provider sends no CORS headers, so a browser blocks the request outright --
- * the `username` header forces a preflight that is never answered. And the
- * credential would otherwise be compiled into the public JS bundle, readable by
- * anyone who opens the dashboard.
+ * Nothing here contacts the provider. That is the point: the provider allows
+ * one call a minute, so serving reads from the database lets any number of
+ * dashboards and phones poll as often as they like.
  */
 
-interface ProviderRow {
-  vehicleNo?: string;
-  alias?: string;
-  imei?: string;
-  latitude?: number;
-  longitude?: number;
-  speed?: number;
-  ignition?: boolean;
-  direction?: number;
-  vehicleStatus?: string;
-  totalGpsOdometer?: number;
-  totalGpsDuration?: number;
-  timestamp?: number;
+interface VehicleRef {
+  id: number;
+  vehicleCode: string;
+  registrationNumber: string;
+  route: string | null;
+  driverAssignments: { driver: { fullName: string } }[];
 }
 
-// Registration numbers are compared without spaces, case-insensitively:
-// the provider reports "RJ14HC7365" where the office may have typed
-// "RJ 14 HC 7365".
-const plateKey = (value: string) => value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+const vehicleSelect = {
+  id: true,
+  vehicleCode: true,
+  registrationNumber: true,
+  route: true,
+  driverAssignments: {
+    where: { unassignedAt: null },
+    select: { driver: { select: { fullName: true } } },
+    take: 1
+  }
+} as const;
 
-/**
- * The provider allows one call per minute and answers a sixth one with
- * "Too many api hit". A single cache shared by every dashboard viewer keeps us
- * inside that budget no matter how many people have the map open, and lets the
- * browser poll as often as it likes without spending quota.
- */
-let cache: { at: number; payload: Awaited<ReturnType<typeof fetchPositions>> } | null = null;
-let inFlight: Promise<Awaited<ReturnType<typeof fetchPositions>>> | null = null;
+function shape(position: any, vehicle: VehicleRef | null) {
+  const reportedAt: Date = position.reportedAt;
+  return {
+    id: vehicle?.vehicleCode ?? position.vehicleNo,
+    vehicleId: vehicle?.id ?? null,
+    vehicleNo: position.vehicleNo,
+    // Empty when the provider reports a bus this school has no record of.
+    vehicleCode: vehicle?.vehicleCode ?? '',
+    registrationNumber: vehicle?.registrationNumber ?? position.vehicleNo,
+    driver: vehicle?.driverAssignments[0]?.driver?.fullName ?? 'Unassigned',
+    route: vehicle?.route ?? '',
+    imei: position.imei ?? '',
+    latitude: Number(position.latitude),
+    longitude: Number(position.longitude),
+    speed: Number(position.speed),
+    ignition: Boolean(position.ignition),
+    direction: position.direction ?? 0,
+    status: position.status ?? '',
+    odometer: position.odometer === null ? 0 : Number(position.odometer),
+    reportedAt: reportedAt.toISOString(),
+    // How old the provider's own reading is. A client showing a bus on a map
+    // needs this to tell a live position from a parked or stale one.
+    ageMs: Date.now() - reportedAt.getTime()
+  };
+}
+
+/** Resolves "BUS-01", "RJ14HC7365" or "RJ 14 HC 7365" to one vehicle. */
+async function resolveVehicle(value: string) {
+  const text = value.trim();
+  if (!text) throw new ApiError(400, 'vehicle is required');
+  const vehicle = await prisma.vehicle.findFirst({
+    where: { OR: [{ vehicleCode: text }, { registrationNumber: text }] },
+    select: vehicleSelect
+  });
+  // Fall back to a punctuation-insensitive match, since the office may store a
+  // plate with spaces the caller did not type.
+  if (vehicle) return { vehicle, plate: plateKey(vehicle.registrationNumber) };
+  const all = await prisma.vehicle.findMany({ select: vehicleSelect });
+  const key = plateKey(text);
+  const loose = all.find(item => plateKey(item.registrationNumber) === key || plateKey(item.vehicleCode) === key);
+  return { vehicle: loose ?? null, plate: loose ? plateKey(loose.registrationNumber) : key };
+}
 
 export class GpsService {
-  static get configured() {
-    return Boolean(config.gps.baseUrl && config.gps.username);
-  }
-
+  /** Latest stored position for every vehicle the provider reports. */
   static async vehicles() {
-    if (!GpsService.configured) {
-      throw new ApiError(503, 'GPS provider is not configured. Set GPS_API_BASE_URL and GPS_API_USERNAME.');
-    }
-
-    const age = cache ? Date.now() - cache.at : Infinity;
-    if (cache && age < config.gps.cacheMs) {
-      return { ...cache.payload, cached: true, ageMs: age };
-    }
-
-    // Collapse concurrent misses into one upstream call, so two dashboards
-    // refreshing together cannot spend two of the minute's single allowance.
-    if (!inFlight) {
-      inFlight = fetchPositions().finally(() => { inFlight = null; });
-    }
-
-    try {
-      const payload = await inFlight;
-      cache = { at: Date.now(), payload };
-      return { ...payload, cached: false, ageMs: 0 };
-    } catch (error) {
-      // Serving a slightly stale position beats showing nothing: a bus that
-      // reported a minute ago is still far more useful than an empty map.
-      if (cache) {
-        return { ...cache.payload, cached: true, stale: true, ageMs: Date.now() - cache.at };
-      }
-      throw error;
-    }
-  }
-}
-
-async function fetchPositions() {
-  const url = `${config.gps.baseUrl.replace(/\/$/, '')}/gps/public/api/v1/vehicles/location/data`;
-
-  // The provider can hang; without a deadline this request would hold a
-  // connection open until the client gives up.
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), config.gps.timeoutMs);
-  let payload: { code?: number; status?: string; data?: ProviderRow[] };
-  try {
-    const response = await fetch(url, {
-      headers: { username: config.gps.username },
-      signal: controller.signal
+    // One row per vehicle_no, the newest. distinct on an ordered query is
+    // served by the (vehicle_no, reported_at) index.
+    const positions = await prisma.vehiclePosition.findMany({
+      distinct: ['vehicleNo'],
+      orderBy: [{ vehicleNo: 'asc' }, { reportedAt: 'desc' }],
+      include: { vehicle: { select: vehicleSelect } }
     });
-    if (!response.ok) {
-      throw new ApiError(502, `GPS provider returned HTTP ${response.status}`);
+
+    const rows = positions.map(position => shape(position, position.vehicle as VehicleRef | null));
+    return {
+      fetchedAt: new Date().toISOString(),
+      total: rows.length,
+      matched: rows.filter(row => row.vehicleCode).length,
+      poller: GpsPoller.status,
+      vehicles: rows
+    };
+  }
+
+  /**
+   * Latest position for specific vehicles only.
+   *
+   * The parent portal uses this so a parent receives the bus their own child
+   * rides and nothing else -- the whole-fleet endpoint is for staff.
+   */
+  static async forVehicleIds(vehicleIds: number[]) {
+    if (!vehicleIds.length) return [];
+    const positions = await prisma.vehiclePosition.findMany({
+      where: { vehicleId: { in: vehicleIds } },
+      distinct: ['vehicleNo'],
+      orderBy: [{ vehicleNo: 'asc' }, { reportedAt: 'desc' }],
+      include: { vehicle: { select: vehicleSelect } }
+    });
+    return positions.map(position => shape(position, position.vehicle as VehicleRef | null));
+  }
+
+  /** Latest stored position for one vehicle, by code or registration number. */
+  static async vehicle(value: string) {
+    const { vehicle, plate } = await resolveVehicle(value);
+    const position = await prisma.vehiclePosition.findFirst({
+      where: { vehicleNo: plate },
+      orderBy: { reportedAt: 'desc' }
+    });
+
+    if (!position) {
+      // Distinguish "we do not know this bus" from "we know it but the
+      // provider has never reported it", which are different problems.
+      throw new ApiError(404, vehicle
+        ? `No GPS position stored for ${vehicle.vehicleCode}. The provider has not reported this vehicle yet.`
+        : `No vehicle or GPS position found for "${value}"`);
     }
-    payload = await response.json() as typeof payload;
-  } catch (error) {
-    if (error instanceof ApiError) throw error;
-    const reason = (error as Error).name === 'AbortError'
-      ? `did not respond within ${config.gps.timeoutMs}ms`
-      : (error as Error).message;
-    throw new ApiError(502, `Could not reach the GPS provider: ${reason}`);
-  } finally {
-    clearTimeout(timer);
+    return shape(position, vehicle);
   }
 
-  // The provider signals failure with code -1 and HTTP 200, so the status
-  // code alone is not enough to tell success from failure.
-  if (payload?.code !== 0 || !Array.isArray(payload.data)) {
-    throw new ApiError(502, `GPS provider rejected the request: ${payload?.status ?? 'unrecognised response'}`);
-  }
+  /** Position history for one vehicle, oldest first, for replaying a route. */
+  static async history(value: string, filters: { from?: string; to?: string; limit?: string }) {
+    const { vehicle, plate } = await resolveVehicle(value);
 
-  // Match positions to our own vehicles so the map can show the route, driver
-  // and student count beside each bus.
-  const vehicles = await prisma.vehicle.findMany({
-    select: {
-      id: true, vehicleCode: true, registrationNumber: true, route: true,
-      driverAssignments: {
-        where: { unassignedAt: null },
-        select: { driver: { select: { fullName: true } } },
-        take: 1
+    const where: any = { vehicleNo: plate };
+    if (filters.from || filters.to) {
+      where.reportedAt = {};
+      if (filters.from) {
+        const from = new Date(filters.from);
+        if (Number.isNaN(from.getTime())) throw new ApiError(400, 'from is not a valid date');
+        where.reportedAt.gte = from;
+      }
+      if (filters.to) {
+        const to = new Date(filters.to);
+        if (Number.isNaN(to.getTime())) throw new ApiError(400, 'to is not a valid date');
+        where.reportedAt.lte = to;
       }
     }
-  });
-  const byPlate = new Map(vehicles.map(vehicle => [plateKey(vehicle.registrationNumber), vehicle]));
 
-  const rows = payload.data
-    .map(item => {
-      const latitude = Number(item.latitude);
-      const longitude = Number(item.longitude);
-      const plate = String(item.vehicleNo ?? '').trim();
-      const matched = byPlate.get(plateKey(plate));
-      return {
-        id: matched?.vehicleCode ?? plate,
-        vehicleId: matched?.id ?? null,
-        vehicleNo: plate || 'Unknown vehicle',
-        // Empty for an unmatched vehicle, so the map can flag one the
-        // provider reports that this school has no record of.
-        vehicleCode: matched?.vehicleCode ?? '',
-        driver: matched?.driverAssignments[0]?.driver?.fullName ?? 'Unassigned',
-        route: matched?.route ?? item.alias ?? '',
-        alias: item.alias ?? '',
-        imei: item.imei ?? '',
-        latitude,
-        longitude,
-        speed: Number(item.speed ?? 0),
-        ignition: Boolean(item.ignition),
-        direction: Number(item.direction ?? 0),
-        status: item.vehicleStatus ?? (item.ignition ? 'Running' : 'Stopped'),
-        odometer: Number(item.totalGpsOdometer ?? 0),
-        gpsDuration: Number(item.totalGpsDuration ?? 0),
-        // Provider sends epoch milliseconds.
-        reportedAt: item.timestamp ? new Date(Number(item.timestamp)).toISOString() : null
-      };
-    })
-    // A position without usable coordinates cannot be drawn.
-    .filter(row => Number.isFinite(row.latitude) && Number.isFinite(row.longitude));
+    const limit = Math.min(Math.max(Number(filters.limit ?? 500), 1), 5000);
+    // Newest first from the index, then reversed: taking the most recent N is
+    // what a caller wants when the window holds more than the limit.
+    const positions = await prisma.vehiclePosition.findMany({
+      where,
+      orderBy: { reportedAt: 'desc' },
+      take: limit
+    });
 
-  return {
-    fetchedAt: new Date().toISOString(),
-    total: rows.length,
-    matched: rows.filter(row => row.vehicleCode).length,
-    vehicles: rows
-  };
+    return {
+      vehicle: vehicle
+        ? { id: vehicle.id, code: vehicle.vehicleCode, registrationNumber: vehicle.registrationNumber }
+        : { id: null, code: '', registrationNumber: plate },
+      count: positions.length,
+      limit,
+      positions: positions.reverse().map(position => shape(position, vehicle))
+    };
+  }
 }

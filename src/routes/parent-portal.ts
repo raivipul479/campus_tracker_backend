@@ -8,6 +8,9 @@ export const parentPortalRouter = Router();
 parentPortalRouter.use(requireParentSession);
 parentPortalRouter.get('/children', asyncHandler(ParentPortalController.children));
 parentPortalRouter.get('/vehicles', asyncHandler(ParentPortalController.vehicles));
+// Scoped to this parent's own children's bus. The fleet-wide /api/gps routes
+// stay behind super-admin auth.
+parentPortalRouter.get('/vehicle-positions', asyncHandler(ParentPortalController.vehiclePositions));
 parentPortalRouter.get('/fee-dues', asyncHandler(ParentPortalController.feeDues));
 parentPortalRouter.get('/payments', asyncHandler(ParentPortalController.payments));
 parentPortalRouter.get('/transport-logs', asyncHandler(ParentPortalController.transportLogs));
