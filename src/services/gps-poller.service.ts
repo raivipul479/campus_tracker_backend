@@ -51,10 +51,39 @@ async function pollOnce() {
 
   if (!data.length) return { stored: 0, seen: rows.length };
 
-  // skipDuplicates leans on the unique (vehicle_no, reported_at) key: a parked
-  // bus repeats the same provider timestamp every poll, so only genuinely new
-  // positions are written.
-  const result = await prisma.vehiclePosition.createMany({ data, skipDuplicates: true });
+  // Store only what actually changed.
+  //
+  // The device keeps reporting while a bus is parked, with a fresh timestamp
+  // every time and identical coordinates. Keying on (vehicle_no, reported_at)
+  // therefore suppressed nothing -- every poll produced a new row, ~1,300 a day
+  // per vehicle, all saying the bus had not moved. Comparing against the last
+  // stored position instead keeps the table proportional to movement.
+  const latest = await prisma.vehiclePosition.findMany({
+    where: { vehicleNo: { in: [...new Set(data.map(row => row.vehicleNo))] } },
+    distinct: ['vehicleNo'],
+    orderBy: [{ vehicleNo: 'asc' }, { reportedAt: 'desc' }],
+    select: { vehicleNo: true, latitude: true, longitude: true, speed: true, ignition: true, reportedAt: true }
+  });
+  const previous = new Map(latest.map(row => [row.vehicleNo, row]));
+
+  const changed = data.filter(row => {
+    const last = previous.get(row.vehicleNo);
+    if (!last) return true;
+    // Never store a reading older than the one we already hold: the provider
+    // can repeat a stale sample when a device drops off the network.
+    if (row.reportedAt <= last.reportedAt) return false;
+    const moved = Number(last.latitude) !== row.latitude || Number(last.longitude) !== row.longitude;
+    const stateChanged = Boolean(last.ignition) !== row.ignition || Number(last.speed) !== row.speed;
+    if (moved || stateChanged) return true;
+    // A stationary bus still gets a heartbeat, so the map can distinguish
+    // "parked here since 8am" from "we stopped hearing from it at 8am".
+    return row.reportedAt.getTime() - last.reportedAt.getTime() >= config.gps.heartbeatMs;
+  });
+
+  if (!changed.length) return { stored: 0, seen: rows.length };
+
+  // skipDuplicates still guards the unique key against two pollers racing.
+  const result = await prisma.vehiclePosition.createMany({ data: changed, skipDuplicates: true });
   return { stored: result.count, seen: rows.length };
 }
 

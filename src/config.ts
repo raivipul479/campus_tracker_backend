@@ -54,7 +54,10 @@ export const config = {
     // Above the provider's one-call-per-minute limit, with margin.
     pollMs: numberFromEnv('GPS_POLL_MS', 66000),
     pollEnabled: (process.env.GPS_POLL_ENABLED ?? 'true') !== 'false',
-    retentionDays: numberFromEnv('GPS_RETENTION_DAYS', 30)
+    retentionDays: numberFromEnv('GPS_RETENTION_DAYS', 30),
+    // A stationary bus is still recorded this often, so a gap in the history
+    // means "no contact", not "parked".
+    heartbeatMs: numberFromEnv('GPS_HEARTBEAT_MS', 15 * 60 * 1000)
   },
   db: {
     host: process.env.DB_HOST ?? '127.0.0.1',
