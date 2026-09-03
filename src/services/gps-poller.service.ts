@@ -21,6 +21,12 @@ let lastPrune = 0;
 
 const HOUR_MS = 60 * 60 * 1000;
 
+/** To the stored column's precision, so comparisons are like for like. */
+const round = (value: number, places: number) => {
+  const factor = 10 ** places;
+  return Math.round(value * factor) / factor;
+};
+
 async function pollOnce() {
   const rows = await GpsProvider.fetchPositions();
 
@@ -36,9 +42,13 @@ async function pollOnce() {
     .map(row => ({
       vehicleNo: plateKey(row.vehicleNo),
       vehicleId: byPlate.get(plateKey(row.vehicleNo)) ?? null,
-      latitude: row.latitude,
-      longitude: row.longitude,
-      speed: row.speed,
+      // Rounded to the column's own precision before anything compares them.
+      // The provider sends 26.961257833333334; DECIMAL(10,7) stores 26.9612578.
+      // Comparing the raw reading against the stored one therefore never
+      // matched, and a parked bus looked like it had moved on every poll.
+      latitude: round(row.latitude, 7),
+      longitude: round(row.longitude, 7),
+      speed: round(row.speed, 2),
       ignition: row.ignition,
       direction: row.direction,
       status: row.status,
