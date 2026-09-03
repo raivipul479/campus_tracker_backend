@@ -62,7 +62,7 @@ SET @sql := IF((SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEM
 PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
 SET @sql := IF((SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=@db AND TABLE_NAME='students')=1 AND (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='students' AND COLUMN_NAME='branch')=0,
-  "ALTER TABLE students ADD COLUMN branch ENUM('JPC','JPIC') NULL AFTER on_hold", 'DO 0');
+  "ALTER TABLE students ADD COLUMN branch ENUM('JPIS','JPS') NULL AFTER on_hold", 'DO 0');
 PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
 SET @sql := IF((SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=@db AND TABLE_NAME='students')=1 AND (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=@db AND TABLE_NAME='students' AND INDEX_NAME='idx_students_on_hold')=0,

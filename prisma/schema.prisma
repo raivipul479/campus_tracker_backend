@@ -398,6 +398,6 @@ enum NotificationType {
 // School branch. Decides which payment button the parent app shows, so the
 // two values must match what the mobile app switches on.
 enum StudentBranch {
-  JPC
-  JPIC
+  JPIS
+  JPS
 }

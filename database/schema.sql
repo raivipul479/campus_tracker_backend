@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS students (
   area VARCHAR(180) NOT NULL,
   address VARCHAR(255) NULL,
   on_hold TINYINT(1) NOT NULL DEFAULT 0,
-  branch ENUM('JPC', 'JPIC') NULL,
+  branch ENUM('JPIS', 'JPS') NULL,
   phone VARCHAR(32) NOT NULL,
   secondary_phone VARCHAR(32) NULL,
   -- The fee sheet's E-Mail Address. Not unique: siblings share a parent's.

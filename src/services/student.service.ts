@@ -71,7 +71,7 @@ function studentPayload(data: Body, existing?: StudentRow) {
     ? (existing?.on_hold ?? false)
     : onHoldInput === true || onHoldInput === 'true' || onHoldInput === 1 || onHoldInput === '1' || onHoldInput === 'Yes';
 
-  // JPC / JPIC — required, because the parent app switches its payment button
+  // JPIS / JPS — required, because the parent app switches its payment button
   // on this and a student with no branch gets no button at all.
   //
   // The column stays nullable at the database level: students created by the
@@ -121,7 +121,7 @@ function validateStudentPhone(value: string, label: string) {
   return validatePhone(value, label);
 }
 
-const BRANCHES = ['JPC', 'JPIC'] as const;
+const BRANCHES = ['JPIS', 'JPS'] as const;
 
 function validateBranch(value: string) {
   const branch = value.trim().toUpperCase();
