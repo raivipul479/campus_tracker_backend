@@ -51,8 +51,10 @@ export const config = {
     username: process.env.GPS_API_USERNAME ?? '',
     timeoutMs: numberFromEnv('GPS_API_TIMEOUT_MS', 10000),
     // The provider rejects a second call inside a minute, so never go below it.
-    // Above the provider's one-call-per-minute limit, with margin.
-    pollMs: numberFromEnv('GPS_POLL_MS', 66000),
+    // The provider refuses a second call inside a minute, so this must stay
+    // above 60000. 90s leaves comfortable margin and halves the daily call
+    // count against the account.
+    pollMs: numberFromEnv('GPS_POLL_MS', 90000),
     pollEnabled: (process.env.GPS_POLL_ENABLED ?? 'true') !== 'false',
     retentionDays: numberFromEnv('GPS_RETENTION_DAYS', 30),
     // A stationary bus is still recorded this often, so a gap in the history
