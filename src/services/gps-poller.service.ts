@@ -72,23 +72,40 @@ async function pollOnce() {
     where: { vehicleNo: { in: [...new Set(data.map(row => row.vehicleNo))] } },
     distinct: ['vehicleNo'],
     orderBy: [{ vehicleNo: 'asc' }, { reportedAt: 'desc' }],
-    select: { vehicleNo: true, latitude: true, longitude: true, speed: true, ignition: true, reportedAt: true }
+    select: { vehicleNo: true, latitude: true, longitude: true, speed: true, ignition: true, status: true, reportedAt: true }
   });
   const previous = new Map(latest.map(row => [row.vehicleNo, row]));
 
+  // A parked bus writes nothing. The row recording where it stopped is kept,
+  // because that is the position the map must show; every later report saying
+  // it is still there adds no information.
+  const unchanged: typeof data = [];
   const changed = data.filter(row => {
     const last = previous.get(row.vehicleNo);
     if (!last) return true;
     // Never store a reading older than the one we already hold: the provider
     // can repeat a stale sample when a device drops off the network.
     if (row.reportedAt <= last.reportedAt) return false;
+
     const moved = Number(last.latitude) !== row.latitude || Number(last.longitude) !== row.longitude;
-    const stateChanged = Boolean(last.ignition) !== row.ignition || Number(last.speed) !== row.speed;
+    const stateChanged = Boolean(last.ignition) !== row.ignition
+      || Number(last.speed) !== row.speed
+      || (last.status ?? '') !== (row.status ?? '');
     if (moved || stateChanged) return true;
-    // A stationary bus still gets a heartbeat, so the map can distinguish
-    // "parked here since 8am" from "we stopped hearing from it at 8am".
-    return row.reportedAt.getTime() - last.reportedAt.getTime() >= config.gps.heartbeatMs;
+
+    unchanged.push(row);
+    return false;
   });
+
+  // Still hearing from a parked bus, so move its fetched_at forward without
+  // adding a row. Otherwise "parked since 8am" and "device went silent at 8am"
+  // would be indistinguishable in the data.
+  if (unchanged.length) {
+    await Promise.all(unchanged.map(row => prisma.vehiclePosition.updateMany({
+      where: { vehicleNo: row.vehicleNo, reportedAt: previous.get(row.vehicleNo)!.reportedAt },
+      data: { fetchedAt: new Date() }
+    })));
+  }
 
   if (!changed.length) return { stored: 0, seen: rows.length };
 

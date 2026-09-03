@@ -56,10 +56,7 @@ export const config = {
     // count against the account.
     pollMs: numberFromEnv('GPS_POLL_MS', 90000),
     pollEnabled: (process.env.GPS_POLL_ENABLED ?? 'true') !== 'false',
-    retentionDays: numberFromEnv('GPS_RETENTION_DAYS', 30),
-    // A stationary bus is still recorded this often, so a gap in the history
-    // means "no contact", not "parked".
-    heartbeatMs: numberFromEnv('GPS_HEARTBEAT_MS', 15 * 60 * 1000)
+    retentionDays: numberFromEnv('GPS_RETENTION_DAYS', 30)
   },
   db: {
     host: process.env.DB_HOST ?? '127.0.0.1',
