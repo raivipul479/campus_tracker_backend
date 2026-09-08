@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, rename, rm, stat } from 'node:fs/promises';
+import { copyFile, mkdir, rename, rm, stat } from 'node:fs/promises';
 import { dirname, extname, join, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ApiError } from '../errors.js';
@@ -176,7 +176,7 @@ export class DocumentService {
       const storedPath = `${folder}/${randomUUID()}${kind.ext}`;
       const destination = absolutePathFor(storedPath);
       await mkdir(dirname(destination), { recursive: true });
-      await rename(file.path, destination);
+      await moveFile(file.path, destination);
 
       const created = await prisma.document.create({
         data: {
@@ -240,6 +240,23 @@ export class DocumentService {
     // file that is already gone. An orphaned file is the safer failure.
     await rm(absolutePathFor(document.storedPath), { force: true }).catch(() => {});
     return { deleted: id };
+  }
+}
+
+/**
+ * Move a file, falling back to copy when rename cannot cross a filesystem.
+ *
+ * Staging happens inside the uploads volume so rename normally suffices, but a
+ * differently configured UPLOADS_ROOT would put the two on separate devices,
+ * where rename fails with EXDEV rather than copying.
+ */
+async function moveFile(from: string, to: string) {
+  try {
+    await rename(from, to);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+    await copyFile(from, to);
+    await rm(from, { force: true });
   }
 }
 
