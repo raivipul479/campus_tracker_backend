@@ -13,6 +13,10 @@ export class DocumentController {
     }));
   }
 
+  static async expiring(req: Request, res: Response) {
+    res.json(await DocumentService.expiring(text(req.query.days)));
+  }
+
   static async create(req: Request, res: Response) {
     // req.superAdmin is set by requireSuperAdmin, so the uploader is recorded
     // from the session rather than anything the client sends.

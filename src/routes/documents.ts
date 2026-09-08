@@ -25,5 +25,7 @@ export const documentsRouter = Router();
 
 documentsRouter.get('/', asyncHandler(DocumentController.list));
 documentsRouter.post('/', upload.single('file'), asyncHandler(DocumentController.create));
+// Before /:id so "expiring" is never read as a document id.
+documentsRouter.get('/expiring', asyncHandler(DocumentController.expiring));
 documentsRouter.get('/:id/file', asyncHandler(DocumentController.download));
 documentsRouter.delete('/:id', asyncHandler(DocumentController.remove));

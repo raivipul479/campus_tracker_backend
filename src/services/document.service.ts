@@ -76,9 +76,31 @@ async function ownerFor(ownerType: OwnerType, ownerIdValue: unknown) {
   return { driverId: null, vehicleId: null, studentId: student.id, label: student.fullName };
 }
 
-function mapDocument(row: any) {
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How long a document has left, from its expiry date.
+ *
+ * Deliberately derived rather than read from the status column: that is set by
+ * hand, and an admin who forgets to change it would leave an expired licence
+ * showing as Verified. The date cannot drift.
+ */
+function expiryState(expiryDate: Date | null, withinDays: number) {
+  if (!expiryDate) return { expiryState: 'none' as const, daysLeft: null };
+  // Compared date-only, so a document expiring today reads as 0 days rather
+  // than a fraction either side of the hour the request happens to arrive.
+  const today = Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate());
+  const expiry = Date.UTC(expiryDate.getUTCFullYear(), expiryDate.getUTCMonth(), expiryDate.getUTCDate());
+  const daysLeft = Math.round((expiry - today) / DAY_MS);
+  if (daysLeft < 0) return { expiryState: 'expired' as const, daysLeft };
+  if (daysLeft <= withinDays) return { expiryState: 'expiring' as const, daysLeft };
+  return { expiryState: 'ok' as const, daysLeft };
+}
+
+function mapDocument(row: any, withinDays = 30) {
   const owner = row.driver?.fullName ?? row.vehicle?.vehicleCode ?? row.student?.fullName ?? '';
   return {
+    ...expiryState(row.expiryDate ?? null, withinDays),
     id: row.id,
     owner,
     ownerId: row.driverId ?? row.vehicleId ?? row.studentId ?? null,
@@ -206,6 +228,32 @@ export class DocumentService {
       await rm(file.path, { force: true }).catch(() => {});
       throw error;
     }
+  }
+
+  /**
+   * Documents already expired or expiring soon, soonest first.
+   *
+   * Documents with no expiry date are left out entirely -- there is nothing to
+   * warn about, and including them would bury the ones that matter.
+   */
+  static async expiring(daysValue?: string) {
+    const days = Number(daysValue ?? 30);
+    if (!Number.isFinite(days) || days < 0 || days > 3650) {
+      throw new ApiError(400, 'days must be between 0 and 3650');
+    }
+    const cutoff = new Date(Date.now() + days * DAY_MS);
+    const rows = await prisma.document.findMany({
+      where: { expiryDate: { not: null, lte: cutoff } },
+      include: withOwners,
+      orderBy: { expiryDate: 'asc' }
+    });
+    const documents = rows.map(row => mapDocument(row, days));
+    return {
+      withinDays: days,
+      expired: documents.filter(doc => doc.expiryState === 'expired').length,
+      expiring: documents.filter(doc => doc.expiryState === 'expiring').length,
+      documents
+    };
   }
 
   /** The file itself, for streaming to an authenticated caller. */
