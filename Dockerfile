@@ -28,6 +28,12 @@ COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node package.json ./
 COPY --chown=node:node prisma ./prisma
 
+# Create the uploads directory owned by the runtime user, before USER node.
+# Docker seeds an empty named volume from the image's directory, including its
+# ownership -- without this the volume is created root-owned and the app, which
+# runs as node, cannot write to it.
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
+
 USER node
 EXPOSE 4000
 
