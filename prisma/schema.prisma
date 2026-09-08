@@ -46,6 +46,7 @@ model Student {
   payments           Payment[]
   feeDues            FeeDue[]
   transportLogs      TransportLog[]
+  documents          Document[]
 
   @@index([fullName], map: "idx_students_name")
   @@index([phone], map: "idx_students_phone")
@@ -121,6 +122,7 @@ model Driver {
   updatedAt          DateTime                  @updatedAt @map("updated_at")
   vehicleAssignments DriverVehicleAssignment[]
   transportLogs      TransportLog[]
+  documents          Document[]
 
   @@index([fullName], map: "idx_drivers_name")
   @@index([status], map: "idx_drivers_status")
@@ -150,6 +152,7 @@ model Vehicle {
   studentAssignments StudentVehicleAssignment[]
   routes             TransportRoute[]
   positions          VehiclePosition[]
+  documents          Document[]
 
   @@index([status], map: "idx_vehicles_status")
   @@map("vehicles")
@@ -400,4 +403,52 @@ enum NotificationType {
 enum StudentBranch {
   JPIS
   JPS
+}
+
+/// Uploaded compliance documents. The file lives on disk (a Docker named
+/// volume); this holds the metadata and the server-generated path.
+model Document {
+  id           Int            @id @default(autoincrement()) @db.UnsignedInt
+  ownerType    DocumentOwner  @map("owner_type")
+  driverId     Int?           @map("driver_id") @db.UnsignedInt
+  vehicleId    Int?           @map("vehicle_id") @db.UnsignedInt
+  studentId    Int?           @map("student_id") @db.UnsignedInt
+  docType      String         @map("doc_type") @db.VarChar(80)
+  docNumber    String         @map("doc_number") @db.VarChar(64)
+  expiryDate   DateTime?      @map("expiry_date") @db.Date
+  status       DocumentStatus @default(Pending)
+  /// What the admin uploaded, for display only -- never used to build a path.
+  originalName String         @map("original_name") @db.VarChar(255)
+  /// Server-generated, relative to the uploads root.
+  storedPath   String         @unique(map: "uq_documents_stored_path") @map("stored_path") @db.VarChar(255)
+  mimeType     String         @map("mime_type") @db.VarChar(100)
+  sizeBytes    Int            @map("size_bytes") @db.UnsignedInt
+  checksum     String         @db.Char(64)
+  uploadedBy   String?        @map("uploaded_by") @db.VarChar(160)
+  notes        String?        @db.VarChar(255)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  driver       Driver?        @relation(fields: [driverId], references: [id], onDelete: Cascade, map: "fk_documents_driver")
+  vehicle      Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: Cascade, map: "fk_documents_vehicle")
+  student      Student?       @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_documents_student")
+
+  @@index([driverId], map: "idx_documents_driver")
+  @@index([vehicleId], map: "idx_documents_vehicle")
+  @@index([studentId], map: "idx_documents_student")
+  @@index([expiryDate], map: "idx_documents_expiry")
+  @@index([status], map: "idx_documents_status")
+  @@map("documents")
+}
+
+enum DocumentOwner {
+  Driver
+  Vehicle
+  Student
+}
+
+enum DocumentStatus {
+  Verified
+  Pending
+  Expiring
+  Expired
 }

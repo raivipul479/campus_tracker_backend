@@ -278,3 +278,44 @@ CREATE TABLE IF NOT EXISTS vehicle_positions (
   CONSTRAINT fk_vehicle_positions_vehicle
     FOREIGN KEY (vehicle_id) REFERENCES vehicles (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS documents (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  owner_type    ENUM('Driver', 'Vehicle', 'Student') NOT NULL,
+  driver_id     INT UNSIGNED NULL,
+  vehicle_id    INT UNSIGNED NULL,
+  student_id    INT UNSIGNED NULL,
+  doc_type      VARCHAR(80)  NOT NULL,
+  doc_number    VARCHAR(64)  NOT NULL,
+  expiry_date   DATE         NULL,
+  status        ENUM('Verified', 'Pending', 'Expiring', 'Expired') NOT NULL DEFAULT 'Pending',
+  original_name VARCHAR(255) NOT NULL,
+  stored_path   VARCHAR(255) NOT NULL,
+  mime_type     VARCHAR(100) NOT NULL,
+  size_bytes    INT UNSIGNED NOT NULL,
+  -- SHA-256 of the contents, so a re-upload of the same file is recognisable
+  -- and corruption on disk is detectable.
+  checksum      CHAR(64)     NOT NULL,
+  uploaded_by   VARCHAR(160) NULL,
+  notes         VARCHAR(255) NULL,
+  created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_documents_stored_path (stored_path),
+  KEY idx_documents_driver (driver_id),
+  KEY idx_documents_vehicle (vehicle_id),
+  KEY idx_documents_student (student_id),
+  KEY idx_documents_expiry (expiry_date),
+  KEY idx_documents_status (status),
+  CONSTRAINT fk_documents_driver
+    FOREIGN KEY (driver_id) REFERENCES drivers (id) ON DELETE CASCADE,
+  CONSTRAINT fk_documents_vehicle
+    FOREIGN KEY (vehicle_id) REFERENCES vehicles (id) ON DELETE CASCADE,
+  CONSTRAINT fk_documents_student
+    FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE,
+  CONSTRAINT chk_documents_owner CHECK (
+    (owner_type = 'Driver'  AND driver_id  IS NOT NULL AND vehicle_id IS NULL AND student_id IS NULL) OR
+    (owner_type = 'Vehicle' AND vehicle_id IS NOT NULL AND driver_id  IS NULL AND student_id IS NULL) OR
+    (owner_type = 'Student' AND student_id IS NOT NULL AND driver_id  IS NULL AND vehicle_id IS NULL)
+  )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -44,6 +44,11 @@ export const config = {
     defaultSuperAdminPassword: superAdminPassword,
     defaultSuperAdminName: process.env.SUPER_ADMIN_NAME ?? 'Super Admin'
   },
+  uploads: {
+    // A Docker named volume in production, so files survive a rebuild.
+    root: process.env.UPLOADS_ROOT ?? 'uploads',
+    maxBytes: numberFromEnv('UPLOAD_MAX_BYTES', 10 * 1024 * 1024)
+  },
   gps: {
     // Proxied server-side: the provider sends no CORS headers, and this
     // credential must not reach the browser bundle.
