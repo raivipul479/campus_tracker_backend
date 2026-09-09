@@ -109,9 +109,17 @@ function mapDocument(row: any, withinDays = 30) {
     number: row.docNumber,
     expiry: row.expiryDate ? row.expiryDate.toISOString().slice(0, 10) : null,
     status: row.status,
-    fileName: row.originalName,
-    mimeType: row.mimeType,
-    sizeBytes: row.sizeBytes,
+    files: (row.files ?? []).map((file: any) => ({
+      id: file.id,
+      fileName: file.originalName,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes,
+      sortOrder: file.sortOrder
+    })),
+    fileCount: (row.files ?? []).length,
+    // The first file, so a list can show something without unpacking them all.
+    fileName: row.files?.[0]?.originalName ?? '',
+    sizeBytes: (row.files ?? []).reduce((total: number, file: any) => total + file.sizeBytes, 0),
     uploadedBy: row.uploadedBy ?? '',
     notes: row.notes ?? '',
     createdAt: row.createdAt.toISOString()
@@ -121,7 +129,8 @@ function mapDocument(row: any, withinDays = 30) {
 const withOwners = {
   driver: { select: { fullName: true } },
   vehicle: { select: { vehicleCode: true } },
-  student: { select: { fullName: true } }
+  student: { select: { fullName: true } },
+  files: { orderBy: { sortOrder: 'asc' } }
 } as const;
 
 export class DocumentService {
@@ -162,9 +171,19 @@ export class DocumentService {
    * fails the temporary file is removed, so a rejected upload leaves nothing
    * behind on disk.
    */
-  static async create(file: Express.Multer.File | undefined, body: Record<string, unknown>, uploadedBy?: string) {
-    if (!file) throw new ApiError(400, 'A file is required');
+  /**
+   * Records an uploaded document and its files.
+   *
+   * A document can be several files -- the front and back of a licence, the
+   * pages of a certificate. Each is validated by content and moved into place;
+   * if any one fails the whole upload is rejected and every file already moved
+   * is removed, so a half-stored document never exists.
+   */
+  static async create(files: Express.Multer.File[] | undefined, body: Record<string, unknown>, uploadedBy?: string) {
+    const uploads = files ?? [];
+    if (!uploads.length) throw new ApiError(400, 'At least one file is required');
 
+    const moved: string[] = [];
     try {
       const ownerType = String(body.ownerType ?? '') as OwnerType;
       if (!OWNER_TYPES.includes(ownerType)) {
@@ -186,19 +205,8 @@ export class DocumentService {
         if (Number.isNaN(expiryDate.getTime())) throw new ApiError(400, 'expiryDate is not a valid date');
       }
 
-      // Read the head for a magic-byte check, and hash the whole file.
-      const head = await readHead(file.path, 8);
-      const kind = sniff(head);
-      if (!kind) throw new ApiError(400, 'Only PDF, JPEG and PNG files are accepted');
-      const checksum = await sha256(file.path);
-
-      // Date-sharded so no single directory accumulates thousands of entries.
-      const now = new Date();
-      const folder = `${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-      const storedPath = `${folder}/${randomUUID()}${kind.ext}`;
-      const destination = absolutePathFor(storedPath);
-      await mkdir(dirname(destination), { recursive: true });
-      await moveFile(file.path, destination);
+      const prepared = await Promise.all(uploads.map((file, index) => prepareFile(file, index)));
+      prepared.forEach(file => moved.push(file.storedPath));
 
       const created = await prisma.document.create({
         data: {
@@ -210,27 +218,69 @@ export class DocumentService {
           docNumber,
           expiryDate,
           status: statusRaw as any,
-          // Kept for display only. The path above is generated, never derived
-          // from this, so a name like "../../server.js" is inert.
-          originalName: String(file.originalname ?? 'document').slice(0, 255),
-          storedPath,
-          mimeType: kind.mime,
-          sizeBytes: file.size,
-          checksum,
           uploadedBy: uploadedBy ?? null,
-          notes: body.notes ? String(body.notes).slice(0, 255) : null
+          notes: body.notes ? String(body.notes).slice(0, 255) : null,
+          files: { create: prepared }
         },
         include: withOwners
       });
       return mapDocument(created);
     } catch (error) {
-      // Never leave an orphan behind when the request is rejected.
-      await rm(file.path, { force: true }).catch(() => {});
+      // Remove whatever was already moved, then the staged temporaries, so a
+      // rejected upload leaves nothing behind.
+      await Promise.all(moved.map(path => rm(absolutePathFor(path), { force: true }).catch(() => {})));
       throw error;
+    } finally {
+      await Promise.all(uploads.map(file => rm(file.path, { force: true }).catch(() => {})));
     }
   }
 
+  /** Adds more files to a document that already exists. */
+  static async addFiles(idValue: unknown, files: Express.Multer.File[] | undefined) {
+    const id = positiveId(idValue, 'document id');
+    const uploads = files ?? [];
+    if (!uploads.length) throw new ApiError(400, 'At least one file is required');
+
+    const document = await prisma.document.findUnique({ where: { id }, include: { files: true } });
+    if (!document) throw new ApiError(404, 'Document not found');
+
+    const moved: string[] = [];
+    try {
+      const startAt = document.files.length;
+      const prepared = await Promise.all(uploads.map((file, index) => prepareFile(file, startAt + index)));
+      prepared.forEach(file => moved.push(file.storedPath));
+      await prisma.documentFile.createMany({ data: prepared.map(file => ({ ...file, documentId: id })) });
+      const updated = await prisma.document.findUnique({ where: { id }, include: withOwners });
+      return mapDocument(updated);
+    } catch (error) {
+      await Promise.all(moved.map(path => rm(absolutePathFor(path), { force: true }).catch(() => {})));
+      throw error;
+    } finally {
+      await Promise.all(uploads.map(file => rm(file.path, { force: true }).catch(() => {})));
+    }
+  }
+
+  /** Removes one file from a document, keeping the document itself. */
+  static async removeFile(idValue: unknown, fileIdValue: unknown) {
+    const id = positiveId(idValue, 'document id');
+    const fileId = positiveId(fileIdValue, 'file id');
+    const file = await prisma.documentFile.findFirst({ where: { id: fileId, documentId: id } });
+    if (!file) throw new ApiError(404, 'File not found on this document');
+
+    const remaining = await prisma.documentFile.count({ where: { documentId: id } });
+    if (remaining <= 1) {
+      // A document with no files is a record of nothing. Deleting the last one
+      // should be deleting the document, which is a different, deliberate act.
+      throw new ApiError(400, 'This is the document\'s only file. Delete the document instead.');
+    }
+
+    await prisma.documentFile.delete({ where: { id: fileId } });
+    await rm(absolutePathFor(file.storedPath), { force: true }).catch(() => {});
+    return { deleted: fileId };
+  }
+
   /**
+   * Documents already expired  /**
    * Documents already expired or expiring soon, soonest first.
    *
    * Documents with no expiry date are left out entirely -- there is nothing to
@@ -256,13 +306,20 @@ export class DocumentService {
     };
   }
 
-  /** The file itself, for streaming to an authenticated caller. */
-  static async fileFor(idValue: unknown) {
+  /**
+   * One file, for streaming to an authenticated caller.
+   *
+   * Without a fileId this returns the document's first file, which is what a
+   * list row wants when it offers a single download.
+   */
+  static async fileFor(idValue: unknown, fileIdValue?: unknown) {
     const id = positiveId(idValue, 'document id');
-    const document = await prisma.document.findUnique({ where: { id } });
-    if (!document) throw new ApiError(404, 'Document not found');
+    const file = fileIdValue === undefined
+      ? await prisma.documentFile.findFirst({ where: { documentId: id }, orderBy: { sortOrder: 'asc' } })
+      : await prisma.documentFile.findFirst({ where: { id: positiveId(fileIdValue, 'file id'), documentId: id } });
+    if (!file) throw new ApiError(404, 'Document file not found');
 
-    const path = absolutePathFor(document.storedPath);
+    const path = absolutePathFor(file.storedPath);
     try {
       await stat(path);
     } catch {
@@ -272,22 +329,23 @@ export class DocumentService {
     }
     return {
       stream: createReadStream(path),
-      fileName: document.originalName,
-      mimeType: document.mimeType,
-      sizeBytes: document.sizeBytes
+      fileName: file.originalName,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes
     };
   }
 
   static async remove(idValue: unknown) {
     const id = positiveId(idValue, 'document id');
-    const document = await prisma.document.findUnique({ where: { id } });
+    const document = await prisma.document.findUnique({ where: { id }, include: { files: true } });
     if (!document) throw new ApiError(404, 'Document not found');
 
+    // The rows go first (the child rows cascade), then the files. An orphaned
+    // file on disk is a better failure than a record pointing at nothing.
     await prisma.document.delete({ where: { id } });
-    // After the row, so a failed delete cannot leave a record pointing at a
-    // file that is already gone. An orphaned file is the safer failure.
-    await rm(absolutePathFor(document.storedPath), { force: true }).catch(() => {});
-    return { deleted: id };
+    await Promise.all(document.files.map(file =>
+      rm(absolutePathFor(file.storedPath), { force: true }).catch(() => {})));
+    return { deleted: id, filesRemoved: document.files.length };
   }
 }
 
@@ -306,6 +364,38 @@ async function moveFile(from: string, to: string) {
     await copyFile(from, to);
     await rm(from, { force: true });
   }
+}
+
+/**
+ * Validate one uploaded file by its contents and move it into the uploads
+ * root, returning the row to store. The caller owns cleanup on failure.
+ */
+async function prepareFile(file: Express.Multer.File, sortOrder: number) {
+  const head = await readHead(file.path, 8);
+  const kind = sniff(head);
+  if (!kind) {
+    throw new ApiError(400, `"${file.originalname}" is not a PDF, JPEG or PNG`);
+  }
+  const checksum = await sha256(file.path);
+
+  // Date-sharded so no single directory accumulates thousands of entries.
+  const now = new Date();
+  const folder = `${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+  const storedPath = `${folder}/${randomUUID()}${kind.ext}`;
+  const destination = absolutePathFor(storedPath);
+  await mkdir(dirname(destination), { recursive: true });
+  await moveFile(file.path, destination);
+
+  return {
+    // Kept for display only. The path above is generated, never derived from
+    // this, so a name like "../../server.js" is inert.
+    originalName: String(file.originalname ?? 'document').slice(0, 255),
+    storedPath,
+    mimeType: kind.mime,
+    sizeBytes: file.size,
+    checksum,
+    sortOrder
+  };
 }
 
 async function readHead(path: string, bytes: number) {

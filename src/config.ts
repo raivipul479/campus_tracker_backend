@@ -47,7 +47,9 @@ export const config = {
   uploads: {
     // A Docker named volume in production, so files survive a rebuild.
     root: process.env.UPLOADS_ROOT ?? 'uploads',
-    maxBytes: numberFromEnv('UPLOAD_MAX_BYTES', 10 * 1024 * 1024)
+    maxBytes: numberFromEnv('UPLOAD_MAX_BYTES', 10 * 1024 * 1024),
+    // Per document: a licence front and back, or the pages of a certificate.
+    maxFiles: numberFromEnv('UPLOAD_MAX_FILES', 10)
   },
   gps: {
     // Proxied server-side: the provider sends no CORS headers, and this

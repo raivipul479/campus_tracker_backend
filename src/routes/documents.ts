@@ -18,14 +18,19 @@ mkdirSync(stagingDirectory, { recursive: true });
 // contents before moving it to its final path.
 const upload = multer({
   dest: stagingDirectory,
-  limits: { fileSize: config.uploads.maxBytes, files: 1 }
+  limits: { fileSize: config.uploads.maxBytes, files: config.uploads.maxFiles }
 });
 
 export const documentsRouter = Router();
 
 documentsRouter.get('/', asyncHandler(DocumentController.list));
-documentsRouter.post('/', upload.single('file'), asyncHandler(DocumentController.create));
+// A document can be several files -- the front and back of a licence, the
+// pages of a certificate.
+documentsRouter.post('/', upload.array('files', config.uploads.maxFiles), asyncHandler(DocumentController.create));
 // Before /:id so "expiring" is never read as a document id.
 documentsRouter.get('/expiring', asyncHandler(DocumentController.expiring));
 documentsRouter.get('/:id/file', asyncHandler(DocumentController.download));
+documentsRouter.get('/:id/files/:fileId', asyncHandler(DocumentController.download));
+documentsRouter.post('/:id/files', upload.array('files', config.uploads.maxFiles), asyncHandler(DocumentController.addFiles));
+documentsRouter.delete('/:id/files/:fileId', asyncHandler(DocumentController.removeFile));
 documentsRouter.delete('/:id', asyncHandler(DocumentController.remove));

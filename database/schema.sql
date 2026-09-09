@@ -289,19 +289,11 @@ CREATE TABLE IF NOT EXISTS documents (
   doc_number    VARCHAR(64)  NOT NULL,
   expiry_date   DATE         NULL,
   status        ENUM('Verified', 'Pending', 'Expiring', 'Expired') NOT NULL DEFAULT 'Pending',
-  original_name VARCHAR(255) NOT NULL,
-  stored_path   VARCHAR(255) NOT NULL,
-  mime_type     VARCHAR(100) NOT NULL,
-  size_bytes    INT UNSIGNED NOT NULL,
-  -- SHA-256 of the contents, so a re-upload of the same file is recognisable
-  -- and corruption on disk is detectable.
-  checksum      CHAR(64)     NOT NULL,
   uploaded_by   VARCHAR(160) NULL,
   notes         VARCHAR(255) NULL,
   created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_documents_stored_path (stored_path),
   KEY idx_documents_driver (driver_id),
   KEY idx_documents_vehicle (vehicle_id),
   KEY idx_documents_student (student_id),
@@ -318,4 +310,24 @@ CREATE TABLE IF NOT EXISTS documents (
     (owner_type = 'Vehicle' AND vehicle_id IS NOT NULL AND driver_id  IS NULL AND student_id IS NULL) OR
     (owner_type = 'Student' AND student_id IS NOT NULL AND driver_id  IS NULL AND vehicle_id IS NULL)
   )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS document_files (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  document_id   INT UNSIGNED NOT NULL,
+  original_name VARCHAR(255) NOT NULL,
+  -- Server-generated, relative to the uploads root. Unique so the same stored
+  -- file can never be claimed by two rows.
+  stored_path   VARCHAR(255) NOT NULL,
+  mime_type     VARCHAR(100) NOT NULL,
+  size_bytes    INT UNSIGNED NOT NULL,
+  checksum      CHAR(64)     NOT NULL,
+  -- Front before back, page 1 before page 2.
+  sort_order    SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_document_files_stored_path (stored_path),
+  KEY idx_document_files_document (document_id, sort_order),
+  CONSTRAINT fk_document_files_document
+    FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -408,29 +408,23 @@ enum StudentBranch {
 /// Uploaded compliance documents. The file lives on disk (a Docker named
 /// volume); this holds the metadata and the server-generated path.
 model Document {
-  id           Int            @id @default(autoincrement()) @db.UnsignedInt
-  ownerType    DocumentOwner  @map("owner_type")
-  driverId     Int?           @map("driver_id") @db.UnsignedInt
-  vehicleId    Int?           @map("vehicle_id") @db.UnsignedInt
-  studentId    Int?           @map("student_id") @db.UnsignedInt
-  docType      String         @map("doc_type") @db.VarChar(80)
-  docNumber    String         @map("doc_number") @db.VarChar(64)
-  expiryDate   DateTime?      @map("expiry_date") @db.Date
-  status       DocumentStatus @default(Pending)
-  /// What the admin uploaded, for display only -- never used to build a path.
-  originalName String         @map("original_name") @db.VarChar(255)
-  /// Server-generated, relative to the uploads root.
-  storedPath   String         @unique(map: "uq_documents_stored_path") @map("stored_path") @db.VarChar(255)
-  mimeType     String         @map("mime_type") @db.VarChar(100)
-  sizeBytes    Int            @map("size_bytes") @db.UnsignedInt
-  checksum     String         @db.Char(64)
-  uploadedBy   String?        @map("uploaded_by") @db.VarChar(160)
-  notes        String?        @db.VarChar(255)
-  createdAt    DateTime       @default(now()) @map("created_at")
-  updatedAt    DateTime       @updatedAt @map("updated_at")
-  driver       Driver?        @relation(fields: [driverId], references: [id], onDelete: Cascade, map: "fk_documents_driver")
-  vehicle      Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: Cascade, map: "fk_documents_vehicle")
-  student      Student?       @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_documents_student")
+  id         Int            @id @default(autoincrement()) @db.UnsignedInt
+  ownerType  DocumentOwner  @map("owner_type")
+  driverId   Int?           @map("driver_id") @db.UnsignedInt
+  vehicleId  Int?           @map("vehicle_id") @db.UnsignedInt
+  studentId  Int?           @map("student_id") @db.UnsignedInt
+  docType    String         @map("doc_type") @db.VarChar(80)
+  docNumber  String         @map("doc_number") @db.VarChar(64)
+  expiryDate DateTime?      @map("expiry_date") @db.Date
+  status     DocumentStatus @default(Pending)
+  uploadedBy String?        @map("uploaded_by") @db.VarChar(160)
+  notes      String?        @db.VarChar(255)
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+  driver     Driver?        @relation(fields: [driverId], references: [id], onDelete: Cascade, map: "fk_documents_driver")
+  vehicle    Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: Cascade, map: "fk_documents_vehicle")
+  student    Student?       @relation(fields: [studentId], references: [id], onDelete: Cascade, map: "fk_documents_student")
+  files      DocumentFile[]
 
   @@index([driverId], map: "idx_documents_driver")
   @@index([vehicleId], map: "idx_documents_vehicle")
@@ -451,4 +445,24 @@ enum DocumentStatus {
   Pending
   Expiring
   Expired
+}
+
+/// The files that make up one document -- the front and back of a licence, the
+/// pages of a certificate. Ordered so they display as they were scanned.
+model DocumentFile {
+  id           Int      @id @default(autoincrement()) @db.UnsignedInt
+  documentId   Int      @map("document_id") @db.UnsignedInt
+  /// What the admin uploaded, for display only -- never used to build a path.
+  originalName String   @map("original_name") @db.VarChar(255)
+  /// Server-generated, relative to the uploads root.
+  storedPath   String   @unique(map: "uq_document_files_stored_path") @map("stored_path") @db.VarChar(255)
+  mimeType     String   @map("mime_type") @db.VarChar(100)
+  sizeBytes    Int      @map("size_bytes") @db.UnsignedInt
+  checksum     String   @db.Char(64)
+  sortOrder    Int      @default(0) @map("sort_order") @db.UnsignedSmallInt
+  createdAt    DateTime @default(now()) @map("created_at")
+  document     Document @relation(fields: [documentId], references: [id], onDelete: Cascade, map: "fk_document_files_document")
+
+  @@index([documentId, sortOrder], map: "idx_document_files_document")
+  @@map("document_files")
 }
