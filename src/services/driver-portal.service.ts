@@ -4,6 +4,7 @@ import { DriverService } from './driver.service.js';
 import { VehicleService } from './vehicle.service.js';
 import { TransportLogService } from './transport-log.service.js';
 import { NotificationService } from './notification.service.js';
+import { GpsService } from './gps.service.js';
 
 async function driverFor(phone: string) {
   const drivers = await DriverService.list({ phone });
@@ -29,6 +30,17 @@ export class DriverPortalService {
     // createTransportLog below validates against this same list, so a held
     // student also cannot have a pickup or drop logged against them.
     return { vehicle, students: students.filter((student: any) => !student.onHold) };
+  }
+
+  /**
+   * Live position of the bus this driver is assigned to, and no other.
+   *
+   * Deliberately not the fleet-wide GPS endpoint, which is super-admin only.
+   */
+  static async vehiclePositions(phone: string) {
+    const driver = await driverFor(phone);
+    if (!driver.vehicleId) return [];
+    return GpsService.forVehicleIds([driver.vehicleId as number]);
   }
 
   static async createTransportLog(phone: string, data: Body) {

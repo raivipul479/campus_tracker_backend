@@ -12,6 +12,10 @@ export class DriverPortalController {
     res.json(await DriverPortalService.roster(req.scopedSession!.phone));
   }
 
+  static async vehiclePositions(req: Request, res: Response) {
+    res.json(await DriverPortalService.vehiclePositions(req.scopedSession!.phone));
+  }
+
   static async createTransportLog(req: Request, res: Response) {
     res.status(201).json(await DriverPortalService.createTransportLog(req.scopedSession!.phone, body(req.body)));
   }
