@@ -11,5 +11,6 @@ driverPortalRouter.get('/roster', asyncHandler(DriverPortalController.roster));
 // Scoped to this driver's own bus. The fleet-wide /api/gps routes stay behind
 // super-admin auth, so a driver token sent there is rejected with a 401.
 driverPortalRouter.get('/vehicle-positions', asyncHandler(DriverPortalController.vehiclePositions));
+driverPortalRouter.get('/vehicle-positions/history', asyncHandler(DriverPortalController.vehicleHistory));
 driverPortalRouter.post('/transport-logs', asyncHandler(DriverPortalController.createTransportLog));
 driverPortalRouter.post('/device-token', asyncHandler(DriverPortalController.registerDevice));

@@ -43,6 +43,13 @@ export class DriverPortalService {
     return GpsService.forVehicleIds([driver.vehicleId as number]);
   }
 
+  /** Where this driver's own bus has been, oldest first, for the route trail. */
+  static async vehicleHistory(phone: string, filters: { from?: string; to?: string; limit?: string }) {
+    const driver = await driverFor(phone);
+    if (!driver.vehicleId) return { vehicle: null, count: 0, limit: 0, positions: [] };
+    return GpsService.historyForVehicleId(driver.vehicleId as number, filters);
+  }
+
   static async createTransportLog(phone: string, data: Body) {
     const driver = await driverFor(phone);
     const { students } = await DriverPortalService.roster(phone);

@@ -133,7 +133,24 @@ export class GpsService {
   /** Position history for one vehicle, oldest first, for replaying a route. */
   static async history(value: string, filters: { from?: string; to?: string; limit?: string }) {
     const { vehicle, plate } = await resolveVehicle(value);
+    return GpsService.historyFor(vehicle, plate, filters);
+  }
 
+  /**
+   * The same history for a vehicle by id. The driver portal uses this so a
+   * driver can replay their own bus's route and no other.
+   */
+  static async historyForVehicleId(vehicleId: number, filters: { from?: string; to?: string; limit?: string }) {
+    const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId }, select: vehicleSelect });
+    if (!vehicle) throw new ApiError(404, 'Vehicle not found');
+    return GpsService.historyFor(vehicle, plateKey(vehicle.registrationNumber), filters);
+  }
+
+  private static async historyFor(
+    vehicle: VehicleRef | null,
+    plate: string,
+    filters: { from?: string; to?: string; limit?: string }
+  ) {
     const where: any = { vehicleNo: plate };
     if (filters.from || filters.to) {
       where.reportedAt = {};
