@@ -15,6 +15,18 @@ export class ParentPortalController {
     res.json(await ParentPortalService.vehiclePositions(req.scopedSession!.phone));
   }
 
+  static async vehicleHistory(req: Request, res: Response) {
+    res.json(await ParentPortalService.vehicleHistory(
+      req.scopedSession!.phone,
+      req.query.studentId ? String(req.query.studentId) : undefined,
+      {
+        from: req.query.from ? String(req.query.from) : undefined,
+        to: req.query.to ? String(req.query.to) : undefined,
+        limit: req.query.limit ? String(req.query.limit) : undefined
+      }
+    ));
+  }
+
   static async feeDues(req: Request, res: Response) {
     res.json(await ParentPortalService.feeDues(req.scopedSession!.phone, req.query.month ? String(req.query.month) : undefined));
   }

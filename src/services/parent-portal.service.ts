@@ -42,6 +42,23 @@ export class ParentPortalService {
     return GpsService.forVehicleIds(vehicleIds);
   }
 
+  /**
+   * Where one child's bus has been, oldest first, for the route trail on the
+   * parent's map. Only ever the bus of a child linked to this parent.
+   */
+  static async vehicleHistory(
+    phone: string,
+    studentIdValue: string | undefined,
+    filters: { from?: string; to?: string; limit?: string }
+  ) {
+    const studentId = Number(studentIdValue);
+    if (!Number.isInteger(studentId) || studentId <= 0) throw new ApiError(400, 'studentId is required');
+    const child = (await childrenFor(phone)).find(item => Number(item.studentId) === studentId);
+    if (!child) throw new ApiError(403, 'This student is not linked to your account');
+    if (!child.vehicleId) return { vehicle: null, count: 0, limit: 0, positions: [] };
+    return GpsService.historyForVehicleId(child.vehicleId as number, filters);
+  }
+
   static async feeDues(phone: string, month?: string) {
     const studentIds = await childIds(phone);
     if (!studentIds.length) return [];
