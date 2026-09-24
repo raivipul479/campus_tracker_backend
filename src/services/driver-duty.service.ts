@@ -2,12 +2,9 @@ import { DriverDutyAction, DriverStatus, Prisma } from '@prisma/client';
 import { ApiError } from '../errors.js';
 import { prisma } from '../prisma.js';
 import { Body, requiredOrExisting } from '../validators.js';
+import { schoolTodayStart } from '../school-time.js';
 
 const allowedActions = new Set<string>(['CheckIn', 'CheckOut']);
-
-// Same UTC-date bucketing as the attendance report, so "today" here and a day
-// in the report are always the same day. See the note in attendance.service.ts.
-const dateKey = (value: Date) => value.toISOString().slice(0, 10);
 
 type DutyRow = {
   id: number;
@@ -45,8 +42,8 @@ export class DriverDutyService {
    * first check-in of the day; the attendance report tracks that separately.
    */
   static async today(driverId: number) {
-    const now = new Date();
-    const from = new Date(`${dateKey(now)}T00:00:00.000Z`);
+    // The school's calendar day, the same day the attendance report uses.
+    const from = schoolTodayStart();
     const logs = await prisma.driverDutyLog.findMany({
       where: { driverId, recordedAt: { gte: from } },
       orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }]

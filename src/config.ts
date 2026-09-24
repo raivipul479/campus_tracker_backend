@@ -37,6 +37,9 @@ export const config = {
   isProduction,
   port: numberFromEnv('PORT', 4000),
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173,http://127.0.0.1:5173',
+  // IANA zone the school runs in. Attendance days and a driver's "today" are
+  // calendar days here, not UTC days, so 02:00 IST counts on its own date.
+  schoolTimeZone: process.env.SCHOOL_TIMEZONE ?? 'Asia/Kolkata',
   auth: {
     tokenSecret,
     tokenTtlSeconds: numberFromEnv('AUTH_TOKEN_TTL_SECONDS', 60 * 60 * 8),

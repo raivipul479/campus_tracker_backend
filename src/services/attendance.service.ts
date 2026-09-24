@@ -1,6 +1,7 @@
 import { ApiError } from '../errors.js';
 import { fromDriverStatus } from '../models/driver.model.js';
 import { prisma } from '../prisma.js';
+import { schoolDateKey, schoolDayStart } from '../school-time.js';
 
 /**
  * Monthly attendance, derived from transport_logs.
@@ -17,23 +18,22 @@ import { prisma } from '../prisma.js';
 
 function monthRange(value?: string) {
   const text = String(value ?? '').trim();
-  const now = new Date();
+  const [thisYear, thisMonth] = schoolDateKey(new Date()).split('-').map(Number);
   const match = text.match(/^(\d{4})-(\d{2})$/);
-  const year = match ? Number(match[1]) : now.getFullYear();
-  const month = match ? Number(match[2]) : now.getMonth() + 1;
+  const year = match ? Number(match[1]) : thisYear;
+  const month = match ? Number(match[2]) : thisMonth;
   if (month < 1 || month > 12) throw new ApiError(400, 'month must be YYYY-MM');
 
-  // Half-open range so the whole final day is included regardless of time.
-  const from = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
-  const to = new Date(Date.UTC(year, month, 1, 0, 0, 0));
+  // Half-open range, from school-local midnight on the 1st to school-local
+  // midnight on the 1st of the next month.
+  const from = schoolDayStart(year, month, 1);
+  const to = month === 12 ? schoolDayStart(year + 1, 1, 1) : schoolDayStart(year, month + 1, 1);
   return { key: `${year}-${String(month).padStart(2, '0')}`, from, to };
 }
 
-// Days are bucketed on the UTC calendar date. School transport runs roughly
-// 06:00-18:00 IST, which is 00:30-12:30 UTC, so a run never straddles a UTC
-// midnight and every log falls on the day it belongs to. If transport ever runs
-// before 05:30 IST this needs an explicit school timezone instead.
-const dateKey = (value: Date) => value.toISOString().slice(0, 10);
+// Days are the school's calendar days (config.schoolTimeZone), not UTC days,
+// so a check-in at 02:00 IST counts on its own date rather than the day before.
+const dateKey = schoolDateKey;
 
 interface LogRow {
   studentId: number;
