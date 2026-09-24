@@ -1,7 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { ApiError } from '../errors.js';
 import { prisma } from '../prisma.js';
-import { toDriverStatus } from './driver.model.js';
 
 export interface AssignDriverPayload {
   driverId: number;
@@ -83,13 +82,11 @@ export class AssignmentModel {
         }
       });
 
-      await tx.driver.update({
-        where: { id: payload.driverId },
-        data: {
-          status: toDriverStatus('On duty'),
-          ...(payload.route ? { route: payload.route } : {})
-        }
-      });
+      // Duty status is left alone: having a bus is not being on duty. It is set
+      // by the driver's check-in / check-out (DriverDutyService).
+      if (payload.route) {
+        await tx.driver.update({ where: { id: payload.driverId }, data: { route: payload.route } });
+      }
 
       if (payload.route) {
         await tx.vehicle.update({ where: { id: vehicle.id }, data: { route: payload.route } });
@@ -113,7 +110,7 @@ export class AssignmentModel {
       });
       await tx.driver.update({
         where: { id: assignment.driverId },
-        data: { status: toDriverStatus('Available'), route: null }
+        data: { route: null }
       });
       return { affectedRows: 1 };
     });
@@ -128,7 +125,7 @@ export class AssignmentModel {
       if (result.count > 0) {
         await tx.driver.update({
           where: { id: driverId },
-          data: { status: toDriverStatus('Available'), route: null }
+          data: { route: null }
         });
       }
       return { affectedRows: result.count };
