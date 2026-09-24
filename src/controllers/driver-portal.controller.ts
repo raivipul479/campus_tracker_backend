@@ -24,6 +24,14 @@ export class DriverPortalController {
     }));
   }
 
+  static async duty(req: Request, res: Response) {
+    res.json(await DriverPortalService.duty(req.scopedSession!.phone));
+  }
+
+  static async recordDuty(req: Request, res: Response) {
+    res.status(201).json(await DriverPortalService.recordDuty(req.scopedSession!.phone, body(req.body)));
+  }
+
   static async createTransportLog(req: Request, res: Response) {
     res.status(201).json(await DriverPortalService.createTransportLog(req.scopedSession!.phone, body(req.body)));
   }

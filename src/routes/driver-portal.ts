@@ -12,5 +12,8 @@ driverPortalRouter.get('/roster', asyncHandler(DriverPortalController.roster));
 // super-admin auth, so a driver token sent there is rejected with a 401.
 driverPortalRouter.get('/vehicle-positions', asyncHandler(DriverPortalController.vehiclePositions));
 driverPortalRouter.get('/vehicle-positions/history', asyncHandler(DriverPortalController.vehicleHistory));
+// Duty check-in / check-out. Also moves drivers.status to On duty / Off duty.
+driverPortalRouter.get('/duty', asyncHandler(DriverPortalController.duty));
+driverPortalRouter.post('/duty', asyncHandler(DriverPortalController.recordDuty));
 driverPortalRouter.post('/transport-logs', asyncHandler(DriverPortalController.createTransportLog));
 driverPortalRouter.post('/device-token', asyncHandler(DriverPortalController.registerDevice));

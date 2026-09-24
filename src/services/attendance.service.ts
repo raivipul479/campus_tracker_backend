@@ -1,4 +1,5 @@
 import { ApiError } from '../errors.js';
+import { fromDriverStatus } from '../models/driver.model.js';
 import { prisma } from '../prisma.js';
 
 /**
@@ -48,6 +49,16 @@ async function logsForMonth(from: Date, to: Date): Promise<LogRow[]> {
     orderBy: { recordedAt: 'asc' }
   });
 }
+
+async function dutyLogsForMonth(from: Date, to: Date) {
+  return prisma.driverDutyLog.findMany({
+    where: { recordedAt: { gte: from, lt: to } },
+    select: { driverId: true, action: true, recordedAt: true },
+    orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }]
+  });
+}
+
+type DutyDay = { checkIn: string | null; checkOut: string | null };
 
 // Distinct dates on which anything at all was logged.
 const operatingDaysFrom = (logs: LogRow[]) =>
@@ -143,14 +154,22 @@ export class AttendanceService {
   /**
    * Per-driver attendance for a month.
    *
-   * A driver counts as present on a day if they logged at least one pickup or
-   * drop. Logs written before driver_id existed have no driver and are counted
-   * separately as unattributed rather than being assigned to someone.
+   * A driver counts as present on a day if they checked in for duty or logged
+   * at least one pickup or drop. Logs written before driver_id existed have no
+   * driver and are counted separately as unattributed rather than being
+   * assigned to someone.
+   *
+   * Operating days here also include days on which any driver checked in, so a
+   * day with check-ins but no pickups still counts. The student report keeps
+   * using transport days only: a check-in alone says nothing about students.
    */
   static async drivers(filters: { month?: string; driverId?: string }) {
     const { key, from, to } = monthRange(filters.month);
-    const logs = await logsForMonth(from, to);
-    const operatingDays = operatingDaysFrom(logs);
+    const [logs, dutyLogs] = await Promise.all([logsForMonth(from, to), dutyLogsForMonth(from, to)]);
+    const operatingDays = [...new Set([
+      ...operatingDaysFrom(logs),
+      ...dutyLogs.filter(log => log.action === 'CheckIn').map(log => dateKey(log.recordedAt))
+    ])].sort();
 
     const driverId = filters.driverId ? Number(filters.driverId) : undefined;
     if (filters.driverId && (!Number.isInteger(driverId) || (driverId as number) <= 0)) {
@@ -183,22 +202,53 @@ export class AttendanceService {
       byDriver.set(log.driverId, entry);
     }
 
+    // First check-in of each day, and the check-out that ended the day. A
+    // check-in after a check-out clears it, so a day that ends on duty (or with
+    // a forgotten check-out) shows no check-out rather than an earlier one.
+    const dutyByDriver = new Map<number, Map<string, DutyDay>>();
+    const lastDutyAt = new Map<number, string>();
+    for (const log of dutyLogs) {
+      const days = dutyByDriver.get(log.driverId) ?? new Map<string, DutyDay>();
+      const day = dateKey(log.recordedAt);
+      const entry = days.get(day) ?? { checkIn: null, checkOut: null };
+      const at = log.recordedAt.toISOString();
+      if (log.action === 'CheckIn') {
+        if (!entry.checkIn) entry.checkIn = at;
+        entry.checkOut = null;
+      } else {
+        entry.checkOut = at;
+      }
+      days.set(day, entry);
+      dutyByDriver.set(log.driverId, days);
+      lastDutyAt.set(log.driverId, at); // logs are in time order
+    }
+
     const rows = drivers.map(driver => {
       const entry = byDriver.get(driver.id);
-      const present = entry ? entry.days.size : 0;
+      const duty = dutyByDriver.get(driver.id) ?? new Map<string, DutyDay>();
+      const checkInDays = [...duty].filter(([, day]) => day.checkIn).map(([date]) => date);
+      const days = new Set([...(entry?.days ?? []), ...checkInDays]);
+      const present = days.size;
+      // ISO strings sort chronologically, so the max is the latest activity.
+      const lastSeen = [entry?.last?.toISOString(), lastDutyAt.get(driver.id)]
+        .filter((value): value is string => Boolean(value)).sort().pop() ?? null;
       return {
         driverId: driver.id,
         driver: driver.fullName,
         phone: driver.phone,
-        status: driver.status,
+        status: fromDriverStatus(driver.status),
         vehicle: driver.vehicleAssignments[0]?.vehicle?.vehicleCode ?? '',
         presentDays: present,
         absentDays: Math.max(operatingDays.length - present, 0),
         trips: entry?.trips ?? 0,
         studentsHandled: entry?.students.size ?? 0,
+        dutyDays: checkInDays.length,
         attendancePct: operatingDays.length ? Math.round((present / operatingDays.length) * 100) : 0,
-        lastSeen: entry?.last ? entry.last.toISOString() : null,
-        dates: entry ? [...entry.days].sort() : []
+        lastSeen,
+        dates: [...days].sort(),
+        // { 'YYYY-MM-DD': { checkIn, checkOut } } as ISO timestamps, for the
+        // day-by-day view in the admin dashboard.
+        duty: Object.fromEntries(duty)
       };
     });
 

@@ -5,6 +5,7 @@ import { VehicleService } from './vehicle.service.js';
 import { TransportLogService } from './transport-log.service.js';
 import { NotificationService } from './notification.service.js';
 import { GpsService } from './gps.service.js';
+import { DriverDutyService } from './driver-duty.service.js';
 
 async function driverFor(phone: string) {
   const drivers = await DriverService.list({ phone });
@@ -50,6 +51,17 @@ export class DriverPortalService {
     return GpsService.historyForVehicleId(driver.vehicleId as number, filters);
   }
 
+  /** Today's check-in / check-out, so the app shows the server's state. */
+  static async duty(phone: string) {
+    const driver = await driverFor(phone);
+    return DriverDutyService.today(driver.driverId);
+  }
+
+  static async recordDuty(phone: string, data: Body) {
+    const driver = await driverFor(phone);
+    return DriverDutyService.record(driver.driverId, data);
+  }
+
   static async createTransportLog(phone: string, data: Body) {
     const driver = await driverFor(phone);
     const { students } = await DriverPortalService.roster(phone);
@@ -57,8 +69,16 @@ export class DriverPortalService {
     if (!Number.isInteger(studentId) || studentId <= 0) throw new ApiError(400, 'studentId is invalid');
     const allowed = students.some((student: any) => Number(student.studentId ?? student.id) === studentId);
     if (!allowed) throw new ApiError(403, 'This student is not on your current roster');
-    // Stamp the log with the driver who recorded it, for the attendance report.
-    const log = await TransportLogService.create({ ...data, driverId: driver.driverId });
+    // Stamp the log with the driver who recorded it, for the attendance report,
+    // and with the server's clock. The app logs a pickup or drop the moment it
+    // happens, and older app builds sent the phone's local time with no offset
+    // ("2026-09-25T08:00:00.000"), which a UTC server read as UTC, storing
+    // every log 5:30 ahead.
+    const log = await TransportLogService.create({
+      ...data,
+      driverId: driver.driverId,
+      recordedAt: new Date().toISOString()
+    });
 
     // Notify the parent — never let a push failure block the log response.
     NotificationService.notifyTransportEvent(studentId, log.action as 'Pickup' | 'Drop').catch(error => {

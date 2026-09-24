@@ -254,6 +254,23 @@ CREATE TABLE IF NOT EXISTS transport_logs (
     ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS driver_duty_logs (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  driver_id INT UNSIGNED NOT NULL,
+  action ENUM('CheckIn', 'CheckOut') NOT NULL,
+  recorded_at DATETIME NOT NULL,
+  latitude DECIMAL(10, 7) NOT NULL,
+  longitude DECIMAL(10, 7) NOT NULL,
+  accuracy DECIMAL(8, 2) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_driver_duty_logs_driver_date (driver_id, recorded_at),
+  KEY idx_driver_duty_logs_date (recorded_at),
+  CONSTRAINT fk_driver_duty_logs_driver
+    FOREIGN KEY (driver_id) REFERENCES drivers(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS vehicle_positions (
   id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   vehicle_no   VARCHAR(32)     NOT NULL,

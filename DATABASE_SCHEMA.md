@@ -49,7 +49,9 @@ Stores driver identity, contact, licence, and duty status.
 Important fields:
 
 - `phone` is unique and is used to identify a driver in the Flutter app.
-- `status` uses the `DriverStatus` enum.
+- `status` uses the `DriverStatus` enum. A duty check-in from the driver app
+  sets it to `On duty` and a check-out sets it to `Off duty` (see
+  `driver_duty_logs`); admins can still edit it by hand.
 - `docs_status` uses the `DocsStatus` enum.
 - Vehicle assignment history is stored separately.
 
@@ -261,6 +263,25 @@ Stores student pickup and drop GPS evidence.
 The driver app creates these records. The parent app groups them by student and
 date to display check-in/check-out history with map locations.
 
+### `driver_duty_logs`
+
+Driver duty check-in and check-out, with the GPS fix at the time.
+
+| Column | Description |
+| --- | --- |
+| `driver_id` | Driver checking in or out (`ON DELETE CASCADE`) |
+| `action` | CheckIn or CheckOut |
+| `recorded_at` | Server time of the event, not the phone's clock |
+| `latitude` | GPS latitude |
+| `longitude` | GPS longitude |
+| `accuracy` | GPS accuracy in metres |
+
+The driver's current state is the latest row of the day. A check-in is refused
+while already checked in today, and a check-out is refused unless checked in
+today. Each row is written in the same transaction as the matching
+`drivers.status` change. Driver attendance counts a day with a check-in as
+present, alongside days with pickups or drops.
+
 ## Relationships
 
 ```text
@@ -276,6 +297,7 @@ FeeDue 0..1 --- * Payment
 Student 0..1 --- * Payment
 
 Student 1 --- * TransportLog
+Driver  1 --- * DriverDutyLog
 ```
 
 Fee dues, transport logs, and assignment history use `ON DELETE RESTRICT`, so
@@ -291,6 +313,7 @@ use `SET NULL` where configured.
 - `PaymentStatus`: Paid, Collected, Pending, Overdue
 - `FeeDueStatus`: Pending, Partial, Paid, Overdue, Waived
 - `TransportLogType`: Pickup, Drop
+- `DriverDutyAction`: CheckIn, CheckOut
 
 ## Monthly Fee Flow
 
