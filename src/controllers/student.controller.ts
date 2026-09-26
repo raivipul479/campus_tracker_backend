@@ -18,14 +18,28 @@ export class StudentController {
   }
 
   static async list(req: Request, res: Response) {
-    res.json(await StudentService.list({
-      q: req.query.q ? String(req.query.q) : undefined,
-      vehicleId: req.query.vehicleId ? String(req.query.vehicleId) : undefined,
-      routeId: req.query.routeId ? String(req.query.routeId) : undefined,
-      assigned: req.query.assigned ? String(req.query.assigned) : undefined,
-      className: req.query.className ? String(req.query.className) : undefined,
-      tagNo: req.query.tagNo ? String(req.query.tagNo) : undefined
-    }));
+    const text = (value: unknown) => (value ? String(value) : undefined);
+    const filters = {
+      q: text(req.query.q),
+      vehicleId: text(req.query.vehicleId),
+      routeId: text(req.query.routeId),
+      assigned: text(req.query.assigned),
+      className: text(req.query.className),
+      tagNo: text(req.query.tagNo)
+    };
+    // With `limit`, one page as { rows, total, nextOffset, ... } for the admin
+    // list's scroll-to-load. Without it, the full array as before, which the
+    // other admin screens and older clients rely on.
+    if (req.query.limit !== undefined) {
+      res.json(await StudentService.page(filters, {
+        limit: text(req.query.limit),
+        offset: text(req.query.offset),
+        sort: text(req.query.sort),
+        dir: text(req.query.dir)
+      }));
+      return;
+    }
+    res.json(await StudentService.list(filters));
   }
 
   static async getById(req: Request, res: Response) {

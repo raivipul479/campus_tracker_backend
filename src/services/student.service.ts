@@ -1,6 +1,6 @@
 import { ApiError } from '../errors.js';
 import { mapStudent, StudentRow } from '../mappers.js';
-import { StudentModel } from '../models/student.model.js';
+import { StudentFilters, StudentModel, StudentSortKey } from '../models/student.model.js';
 import {
   Body,
   optionalBoundedNumber,
@@ -12,10 +12,53 @@ import {
   validateText
 } from '../validators.js';
 
+// The admin table's column keys (see mapStudent) to sortable database fields.
+const sortFields: Record<string, StudentSortKey> = {
+  name: 'fullName',
+  regNo: 'registrationNumber',
+  f: 'serialNumber',
+  class: 'className',
+  section: 'section',
+  branch: 'branch',
+  onHold: 'onHold',
+  guardianName: 'guardianName',
+  kms: 'distanceKm',
+  tagNo: 'tagNo',
+  area: 'area',
+  address: 'address',
+  phone: 'phone',
+  secondaryPhone: 'secondaryPhone'
+};
+
+const MAX_PAGE_SIZE = 200;
+
 export class StudentService {
-  static async list(filters: { q?: string; vehicleId?: string; routeId?: string; assigned?: string; className?: string; tagNo?: string; phone?: string }) {
+  static async list(filters: StudentFilters) {
     const students = await StudentModel.findAll(filters);
     return students.map(mapStudent);
+  }
+
+  /**
+   * One page of students for scroll-to-load: `{ rows, total, offset, limit,
+   * nextOffset }`, where nextOffset is null once the last page is reached.
+   * `sort` is an admin column key (name, regNo, class, ...), `dir` asc or desc.
+   */
+  static async page(filters: StudentFilters, query: { limit?: string; offset?: string; sort?: string; dir?: string }) {
+    const limit = Number(query.limit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE_SIZE) {
+      throw new ApiError(400, `limit must be an integer from 1 to ${MAX_PAGE_SIZE}`);
+    }
+    const offset = query.offset === undefined ? 0 : Number(query.offset);
+    if (!Number.isInteger(offset) || offset < 0) throw new ApiError(400, 'offset must be a non-negative integer');
+
+    const sortKey = query.sort ?? 'name';
+    const sort = sortFields[sortKey];
+    if (!sort) throw new ApiError(400, `Cannot sort students by ${sortKey}`);
+    const dir = query.dir === 'desc' ? 'desc' : 'asc';
+
+    const { total, rows } = await StudentModel.findPage(filters, { limit, offset, sort, dir });
+    const nextOffset = offset + rows.length < total ? offset + rows.length : null;
+    return { rows: rows.map(mapStudent), total, offset, limit, nextOffset };
   }
 
   static async getById(idValue: unknown) {

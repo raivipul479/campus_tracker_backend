@@ -20,70 +20,104 @@ export interface StudentPayload {
   email: string | null;
 }
 
+export type StudentFilters = { q?: string; vehicleId?: string; routeId?: string; assigned?: string; className?: string; tagNo?: string; phone?: string };
+
+// Columns the admin list can sort by on the server. Route and fee columns come
+// from relations and are not sortable.
+export const studentSortKeys = [
+  'fullName', 'registrationNumber', 'serialNumber', 'className', 'section', 'branch', 'onHold',
+  'guardianName', 'distanceKm', 'tagNo', 'area', 'address', 'phone', 'secondaryPhone'
+] as const;
+export type StudentSortKey = (typeof studentSortKeys)[number];
+
+function studentWhere(filters: StudentFilters): Prisma.StudentWhereInput {
+  const vehicleFilter = filters.vehicleId
+    ? {
+        routeAssignments: {
+          some: {
+            unassignedAt: null,
+            route: {
+              vehicle: /^\d+$/.test(filters.vehicleId)
+                ? { id: Number(filters.vehicleId) }
+                : { vehicleCode: filters.vehicleId }
+            }
+          }
+        }
+      }
+    : {};
+
+  const routeFilter = filters.routeId
+    ? {
+        routeAssignments: {
+          some: {
+            unassignedAt: null,
+            route: /^\d+$/.test(filters.routeId)
+              ? { id: Number(filters.routeId) }
+              : { routeCode: filters.routeId }
+          }
+        }
+      }
+    : {};
+
+  const assignmentFilter =
+    filters.assigned === 'assigned'
+      ? { routeAssignments: { some: { unassignedAt: null } } }
+      : filters.assigned === 'unassigned'
+        ? { routeAssignments: { none: { unassignedAt: null } } }
+        : {};
+
+  return {
+    ...vehicleFilter,
+    ...routeFilter,
+    ...assignmentFilter,
+    ...(filters.className ? { className: filters.className } : {}),
+    ...(filters.tagNo ? { tagNo: filters.tagNo } : {}),
+    ...(filters.phone ? { AND: [{ OR: [{ phone: filters.phone }, { secondaryPhone: filters.phone }] }] } : {}),
+    ...(filters.q
+      ? {
+          OR: [
+            { fullName: { contains: filters.q } },
+            { registrationNumber: { contains: filters.q } },
+            { area: { contains: filters.q } },
+            { address: { contains: filters.q } },
+            { guardianName: { contains: filters.q } },
+            { tagNo: { contains: filters.q } },
+            { phone: { contains: filters.q } }
+          ]
+        }
+      : {})
+  };
+}
+
 export class StudentModel {
-  static async findAll(filters: { q?: string; vehicleId?: string; routeId?: string; assigned?: string; className?: string; tagNo?: string; phone?: string }) {
-    const vehicleFilter = filters.vehicleId
-      ? {
-          routeAssignments: {
-            some: {
-              unassignedAt: null,
-              route: {
-                vehicle: /^\d+$/.test(filters.vehicleId)
-                  ? { id: Number(filters.vehicleId) }
-                  : { vehicleCode: filters.vehicleId }
-              }
-            }
-          }
-        }
-      : {};
-
-    const routeFilter = filters.routeId
-      ? {
-          routeAssignments: {
-            some: {
-              unassignedAt: null,
-              route: /^\d+$/.test(filters.routeId)
-                ? { id: Number(filters.routeId) }
-                : { routeCode: filters.routeId }
-            }
-          }
-        }
-      : {};
-
-    const assignmentFilter =
-      filters.assigned === 'assigned'
-        ? { routeAssignments: { some: { unassignedAt: null } } }
-        : filters.assigned === 'unassigned'
-          ? { routeAssignments: { none: { unassignedAt: null } } }
-          : {};
-
+  static async findAll(filters: StudentFilters) {
     const students = await prisma.student.findMany({
-      where: {
-        ...vehicleFilter,
-        ...routeFilter,
-        ...assignmentFilter,
-        ...(filters.className ? { className: filters.className } : {}),
-        ...(filters.tagNo ? { tagNo: filters.tagNo } : {}),
-        ...(filters.phone ? { AND: [{ OR: [{ phone: filters.phone }, { secondaryPhone: filters.phone }] }] } : {}),
-        ...(filters.q
-          ? {
-              OR: [
-                { fullName: { contains: filters.q } },
-                { registrationNumber: { contains: filters.q } },
-                { area: { contains: filters.q } },
-                { address: { contains: filters.q } },
-                { guardianName: { contains: filters.q } },
-                { tagNo: { contains: filters.q } },
-                { phone: { contains: filters.q } }
-              ]
-            }
-          : {})
-      },
+      where: studentWhere(filters),
       include: activeVehicleInclude(),
       orderBy: { fullName: 'asc' }
     });
 
     return students.map(mapStudentRecord);
+  }
+
+  /**
+   * One page of students plus the total matching the filters, for the admin
+   * list's scroll-to-load. Ordered by [sort] with id as a tie-breaker, so rows
+   * never repeat or go missing between pages when the sort key has duplicates.
+   */
+  static async findPage(filters: StudentFilters, page: { limit: number; offset: number; sort: StudentSortKey; dir: 'asc' | 'desc' }) {
+    const where = studentWhere(filters);
+    const [total, students] = await prisma.$transaction([
+      prisma.student.count({ where }),
+      prisma.student.findMany({
+        where,
+        include: activeVehicleInclude(),
+        orderBy: [{ [page.sort]: page.dir }, { id: page.dir }],
+        skip: page.offset,
+        take: page.limit
+      })
+    ]);
+    return { total, rows: students.map(mapStudentRecord) };
   }
 
   static async findById(id: number) {
