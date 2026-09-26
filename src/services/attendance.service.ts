@@ -1,5 +1,6 @@
 import { ApiError } from '../errors.js';
 import { fromDriverStatus } from '../models/driver.model.js';
+import { PageRequest, pageInfo } from '../paging.js';
 import { prisma } from '../prisma.js';
 import { schoolDateKey, schoolDayStart } from '../school-time.js';
 
@@ -64,6 +65,36 @@ type DutyDay = { checkIn: string | null; checkOut: string | null };
 const operatingDaysFrom = (logs: LogRow[]) =>
   [...new Set(logs.map(log => dateKey(log.recordedAt)))].sort();
 
+/**
+ * Applies the dashboard's search, works out the summary cards over every
+ * matching row (not just the page on screen), then cuts one page if asked.
+ * The report is computed in memory from the month's logs anyway, so paging
+ * here only trims what is sent to and drawn by the browser.
+ */
+function searchAndPage<T extends { attendancePct: number; presentDays: number }>(
+  rows: T[],
+  operatingDays: number,
+  q: string | undefined,
+  fields: (row: T) => unknown[],
+  page: PageRequest | null
+) {
+  const text = q?.trim().toLowerCase();
+  const matched = text
+    ? rows.filter(row => fields(row).some(value => String(value ?? '').toLowerCase().includes(text)))
+    : rows;
+  const summary = {
+    // Averaged over the listed people, so a search re-averages it.
+    averagePct: matched.length
+      ? Math.round(matched.reduce((sum, row) => sum + (row.attendancePct || 0), 0) / matched.length)
+      : 0,
+    fullAttendance: operatingDays ? matched.filter(row => row.presentDays === operatingDays).length : 0,
+    neverPresent: matched.filter(row => !row.presentDays).length
+  };
+  if (!page) return { summary, total: matched.length, rows: matched };
+  const slice = matched.slice(page.offset, page.offset + page.limit);
+  return { summary, rows: slice, ...pageInfo(page, slice.length, matched.length) };
+}
+
 export class AttendanceService {
   /**
    * Per-student attendance for a month.
@@ -72,7 +103,7 @@ export class AttendanceService {
    * day, pickup or drop. Students on hold are included but flagged, since a
    * held student legitimately has no logs and should not read as absent.
    */
-  static async students(filters: { month?: string; studentId?: string; routeId?: string }) {
+  static async students(filters: { month?: string; studentId?: string; routeId?: string; q?: string }, page: PageRequest | null = null) {
     const { key, from, to } = monthRange(filters.month);
     const logs = await logsForMonth(from, to);
     const operatingDays = operatingDaysFrom(logs);
@@ -147,7 +178,7 @@ export class AttendanceService {
       operatingDays: operatingDays.length,
       dates: operatingDays,
       totalStudents: rows.length,
-      rows
+      ...searchAndPage(rows, operatingDays.length, filters.q, row => [row.student, row.regNo, row.class, row.route], page)
     };
   }
 
@@ -163,7 +194,7 @@ export class AttendanceService {
    * day with check-ins but no pickups still counts. The student report keeps
    * using transport days only: a check-in alone says nothing about students.
    */
-  static async drivers(filters: { month?: string; driverId?: string }) {
+  static async drivers(filters: { month?: string; driverId?: string; q?: string }, page: PageRequest | null = null) {
     const { key, from, to } = monthRange(filters.month);
     const [logs, dutyLogs] = await Promise.all([logsForMonth(from, to), dutyLogsForMonth(from, to)]);
     const operatingDays = [...new Set([
@@ -260,7 +291,7 @@ export class AttendanceService {
       // Logs with no driver recorded — pre-migration rows, or logs created
       // outside the driver portal.
       unattributedLogs: unattributed,
-      rows
+      ...searchAndPage(rows, operatingDays.length, filters.q, row => [row.driver, row.phone, row.vehicle], page)
     };
   }
 }

@@ -5,6 +5,7 @@ import { dirname, extname, join, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ApiError } from '../errors.js';
 import { config } from '../config.js';
+import { PageRequest, pageInfo } from '../paging.js';
 import { prisma } from '../prisma.js';
 import { positiveId, validateText } from '../validators.js';
 
@@ -134,7 +135,7 @@ const withOwners = {
 } as const;
 
 export class DocumentService {
-  static async list(filters: { ownerType?: string; ownerId?: string; status?: string; q?: string }) {
+  static async list(filters: { ownerType?: string; ownerId?: string; status?: string; q?: string }, page: PageRequest | null = null) {
     const where: any = {};
     if (filters.ownerType) {
       if (!OWNER_TYPES.includes(filters.ownerType as OwnerType)) {
@@ -152,15 +153,32 @@ export class DocumentService {
     if (filters.status) where.status = filters.status;
     if (filters.q) {
       const q = String(filters.q).trim();
-      where.OR = [{ docType: { contains: q } }, { docNumber: { contains: q } }, { originalName: { contains: q } }];
+      where.OR = [
+        { docType: { contains: q } },
+        { docNumber: { contains: q } },
+        // File names live on the files, not the document.
+        { files: { some: { originalName: { contains: q } } } },
+        // The owner, which the dashboard's search box has always matched on.
+        { driver: { fullName: { contains: q } } },
+        { student: { fullName: { contains: q } } },
+        { vehicle: { vehicleCode: { contains: q } } },
+        { vehicle: { registrationNumber: { contains: q } } }
+      ];
     }
 
-    const rows = await prisma.document.findMany({
-      where,
-      include: withOwners,
-      orderBy: { createdAt: 'desc' }
-    });
-    return rows.map(mapDocument);
+    // id breaks ties so a page boundary never repeats or skips a document.
+    const orderBy = [{ createdAt: 'desc' as const }, { id: 'desc' as const }];
+    if (!page) {
+      const rows = await prisma.document.findMany({ where, include: withOwners, orderBy });
+      return rows.map(mapDocument);
+    }
+
+    // With a page: { rows, total, offset, limit, nextOffset } for scroll-to-load.
+    const [total, rows] = await prisma.$transaction([
+      prisma.document.count({ where }),
+      prisma.document.findMany({ where, include: withOwners, orderBy, skip: page.offset, take: page.limit })
+    ]);
+    return { rows: rows.map(mapDocument), ...pageInfo(page, rows.length, total) };
   }
 
   /**

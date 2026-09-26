@@ -1,16 +1,19 @@
 import { Request, Response } from 'express';
 import { DocumentService } from '../services/document.service.js';
+import { parsePage } from '../paging.js';
 
 const text = (value: unknown) => (value ? String(value) : undefined);
 
 export class DocumentController {
   static async list(req: Request, res: Response) {
+    // With `limit`, one page for the dashboard's scroll-to-load; without it,
+    // the full array as before.
     res.json(await DocumentService.list({
       ownerType: text(req.query.ownerType),
       ownerId: text(req.query.ownerId),
       status: text(req.query.status),
       q: text(req.query.q)
-    }));
+    }, parsePage(req.query)));
   }
 
   static async expiring(req: Request, res: Response) {
