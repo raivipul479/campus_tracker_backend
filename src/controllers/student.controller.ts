@@ -14,7 +14,7 @@ export class StudentController {
     if (!Number.isInteger(rowOffset) || rowOffset < 0) {
       throw new ApiError(400, 'rowOffset must be a non-negative integer');
     }
-    res.json(await StudentImportService.run(payload.rows, commit, rowOffset));
+    res.json(await StudentImportService.run(payload.rows, commit, rowOffset, payload.header ?? null));
   }
 
   static async list(req: Request, res: Response) {
