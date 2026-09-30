@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { ApiError } from '../errors.js';
 import { prisma } from '../prisma.js';
 import { normalizeRouteCode } from '../validators.js';
@@ -62,12 +63,40 @@ interface ParsedRow {
   secondaryPhone: string | null;
   routeCode: string | null;
   distanceKm: number | null;
+  slabRaw: string;
+  sheetFee: number | null;
+  feeRaw: string;
 }
 
 export interface RejectedRow {
   rowNumber: number;
   reason: string;
   preview: string;
+}
+
+type RouteWithSlabs = Prisma.TransportRouteGetPayload<{ include: { feeSlabs: true } }>;
+type RouteSlab = RouteWithSlabs['feeSlabs'][number];
+
+interface ActiveAssignment {
+  routeId: number;
+  slabId: number | null;
+}
+
+/**
+ * What a row will do to the student's route assignment, worked out against the
+ * database before anything is written so the dry run reports exactly what the
+ * commit will do.
+ */
+interface RoutePlan {
+  route: RouteWithSlabs;
+  slab: RouteSlab | null;
+  change: 'none' | 'assign' | 'slab';
+}
+
+interface ResolvedRow {
+  row: ParsedRow;
+  studentExists: boolean;
+  plan: RoutePlan | null;
 }
 
 const cell = (row: string[], index: number) => String(row?.[index] ?? '').trim();
@@ -83,6 +112,17 @@ function normalizePhone(value: string, label: string): string {
   }
   return `+${digits}`;
 }
+
+// "4,200", "4200/-", "Rs. 4200" -> 4200. Null when the cell holds no number.
+function parseSheetFee(value: string): number | null {
+  const match = value.replace(/,/g, '').match(/\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+}
+
+const km = (value: Prisma.Decimal | number) => Number(value);
+const slabLabel = (slab: RouteSlab) => `${km(slab.minKm)}-${km(slab.maxKm)} km`;
+const slabList = (route: RouteWithSlabs) => route.feeSlabs.map(slabLabel).join(', ');
+const money = (value: number) => `₹${Number.isInteger(value) ? value : value.toFixed(2)}`;
 
 // "0-5 KM" -> 5, "11-15 KM" -> 15. The sheet records a band, not a measured
 // distance, so the upper bound is stored.
@@ -179,7 +219,10 @@ export class StudentImportService {
           phone: normalizePhone(phoneRaw, 'phone number'),
           secondaryPhone: secondaryRaw ? normalizePhone(secondaryRaw, 'secondary phone') : null,
           routeCode: normalizeRouteCode(cell(row, COL.routeCode)) || null,
-          distanceKm: parseSlabKm(cell(row, COL.slabKm))
+          distanceKm: parseSlabKm(cell(row, COL.slabKm)),
+          slabRaw: cell(row, COL.slabKm),
+          sheetFee: parseSheetFee(cell(row, COL.fees)),
+          feeRaw: cell(row, COL.fees)
         });
       } catch (error) {
         rejected.push({ rowNumber, reason: (error as Error).message, preview });
@@ -190,24 +233,145 @@ export class StudentImportService {
   }
 
   /**
+   * Checks every parsed row against the routes and existing assignments in the
+   * database, so the dry run reports exactly what the commit will do. Rows whose
+   * route or slab cannot be settled are rejected rather than imported onto a
+   * wrong fee.
+   *
+   * - The route must already exist. Import used to create a missing route on the
+   *   fly, which turned every typo in column J into a ₹0 route with no bus.
+   * - On a route with distance slabs the student is placed on the slab covering
+   *   their Slab KMS, because the slab is what they are billed. A distance no
+   *   slab covers is rejected. An empty Slab KMS keeps the slab the student
+   *   already has on that route, falls back to the only slab if there is one,
+   *   and is otherwise rejected — the same refusal to guess as resolveSlabId.
+   * - FEES (column M) is compared with what the student will actually be billed.
+   *   A mismatch is a warning, not a rejection: the configured slab or flat fee
+   *   is what billing uses either way, and the office decides which is right.
+   */
+  static async resolve(parsed: ParsedRow[]) {
+    const codes = [...new Set(parsed.map(row => row.routeCode).filter((code): code is string => Boolean(code)))];
+    const routes = codes.length
+      ? await prisma.transportRoute.findMany({
+          where: { routeCode: { in: codes } },
+          include: { feeSlabs: { orderBy: { minKm: 'asc' } } }
+        })
+      : [];
+    const routesByCode = new Map(routes.map(route => [route.routeCode.toUpperCase(), route]));
+
+    const students = parsed.length
+      ? await prisma.student.findMany({
+          where: { registrationNumber: { in: parsed.map(row => row.registrationNumber) } },
+          select: {
+            registrationNumber: true,
+            routeAssignments: { where: { unassignedAt: null }, select: { routeId: true, slabId: true }, take: 1 }
+          }
+        })
+      : [];
+    const activeByReg = new Map<string, ActiveAssignment | null>(students.map(student => [
+      student.registrationNumber.toLowerCase(),
+      student.routeAssignments[0] ?? null
+    ]));
+
+    const resolved: ResolvedRow[] = [];
+    const rejected: RejectedRow[] = [];
+    const warnings: RejectedRow[] = [];
+    const unknownRoutes = new Map<string, number>();
+
+    for (const row of parsed) {
+      const regKey = row.registrationNumber.toLowerCase();
+      const studentExists = activeByReg.has(regKey);
+      const active = activeByReg.get(regKey) ?? null;
+      const preview = `${row.registrationNumber} | ${row.fullName}`;
+      const reject = (reason: string) => rejected.push({ rowNumber: row.rowNumber, reason, preview });
+
+      if (!row.routeCode) {
+        resolved.push({ row, studentExists, plan: null });
+        continue;
+      }
+
+      const route = routesByCode.get(row.routeCode);
+      if (!route) {
+        unknownRoutes.set(row.routeCode, (unknownRoutes.get(row.routeCode) ?? 0) + 1);
+        reject(`route "${row.routeCode}" (column J) does not exist — create it on the Routes page, or fix the code in the sheet`);
+        continue;
+      }
+
+      let slab: RouteSlab | null = null;
+      if (route.feeSlabs.length) {
+        const distance = row.distanceKm;
+        if (distance !== null) {
+          // Slabs never overlap (RouteService.parseSlabs), so at most one matches.
+          slab = route.feeSlabs.find(candidate => km(candidate.minKm) <= distance && distance <= km(candidate.maxKm)) ?? null;
+          if (!slab) {
+            reject(`no distance slab on route ${route.routeCode} covers ${distance} km (Slab KMS "${row.slabRaw}"); its slabs are ${slabList(route)}`);
+            continue;
+          }
+        } else if (active?.routeId === route.id && active.slabId !== null) {
+          slab = route.feeSlabs.find(candidate => candidate.id === active.slabId) ?? null;
+        } else if (route.feeSlabs.length === 1) {
+          slab = route.feeSlabs[0];
+        } else {
+          reject(`${row.slabRaw ? `Slab KMS "${row.slabRaw}" has no distance` : 'Slab KMS (column K) is empty'} and route ${route.routeCode} has several distance slabs (${slabList(route)})`);
+          continue;
+        }
+      }
+
+      const change: RoutePlan['change'] = active?.routeId !== route.id ? 'assign'
+        : active.slabId !== (slab?.id ?? null) ? 'slab'
+        : 'none';
+
+      if (row.feeRaw) {
+        const expected = Number(slab ? slab.fee : route.fee);
+        const source = slab ? `slab ${slabLabel(slab)} on route ${route.routeCode}` : `route ${route.routeCode}'s flat fee`;
+        if (row.sheetFee === null) {
+          warnings.push({ rowNumber: row.rowNumber, reason: `FEES (column M) "${row.feeRaw}" is not a number, so it was not checked`, preview });
+        } else if (Math.abs(row.sheetFee - expected) > 0.005) {
+          warnings.push({
+            rowNumber: row.rowNumber,
+            reason: `FEES (column M) says ${money(row.sheetFee)} but ${source} is ${money(expected)} — billing will use ${money(expected)}`,
+            preview
+          });
+        }
+      }
+
+      resolved.push({ row, studentExists, plan: { route, slab, change } });
+    }
+
+    return {
+      resolved,
+      rejected,
+      warnings,
+      unknownRoutes: [...unknownRoutes].map(([routeCode, rows]) => ({ routeCode, rows }))
+    };
+  }
+
+  /**
    * Validates the grid and, when commit is true, writes it.
    *
    * Idempotent: students are matched on registration number, so re-running
    * updates rather than duplicating.
    */
   static async run(rows: unknown, commit: boolean, rowOffset = 0) {
-    const { parsed, rejected } = StudentImportService.parse(rows, rowOffset);
+    const parsed = StudentImportService.parse(rows, rowOffset);
+    const { resolved, rejected: unresolved, warnings, unknownRoutes } = await StudentImportService.resolve(parsed.parsed);
+    const rejected = [...parsed.rejected, ...unresolved].sort((a, b) => a.rowNumber - b.rowNumber);
+    const total = parsed.parsed.length + parsed.rejected.length;
 
     if (!commit) {
       return {
         dryRun: true,
-        total: parsed.length + rejected.length,
-        valid: parsed.length,
-        created: 0,
-        updated: 0,
-        routesAssigned: 0,
+        total,
+        valid: resolved.length,
+        // Projections: what the commit would do if run now.
+        created: resolved.filter(item => !item.studentExists).length,
+        updated: resolved.filter(item => item.studentExists).length,
+        routesAssigned: resolved.filter(item => item.plan?.change === 'assign').length,
+        slabsChanged: resolved.filter(item => item.plan?.change === 'slab').length,
         rejected,
-        sample: parsed.slice(0, 10).map(row => ({
+        warnings,
+        unknownRoutes,
+        sample: resolved.slice(0, 10).map(({ row, plan }) => ({
           registrationNumber: row.registrationNumber,
           fullName: row.fullName,
           className: [row.className, row.section].filter(Boolean).join(' '),
@@ -215,7 +379,9 @@ export class StudentImportService {
           phone: row.phone,
           secondaryPhone: row.secondaryPhone,
           routeCode: row.routeCode,
-          distanceKm: row.distanceKm
+          distanceKm: row.distanceKm,
+          slab: plan?.slab ? slabLabel(plan.slab) : null,
+          fee: plan ? Number(plan.slab ? plan.slab.fee : plan.route.fee) : null
         }))
       };
     }
@@ -223,13 +389,15 @@ export class StudentImportService {
     let created = 0;
     let updated = 0;
     let routesAssigned = 0;
+    let slabsChanged = 0;
     const failures: RejectedRow[] = [];
 
-    for (const row of parsed) {
+    for (const { row, plan } of resolved) {
       try {
         // One transaction per student: a mid-way failure leaves that student
-        // fully absent rather than half-imported.
-        await prisma.$transaction(async tx => {
+        // fully absent rather than half-imported. Counts are taken from the
+        // transaction's result so a rolled-back row is never counted.
+        const outcome = await prisma.$transaction(async tx => {
           const existing = await tx.student.findUnique({
             where: { registrationNumber: row.registrationNumber },
             select: { id: true }
@@ -252,29 +420,25 @@ export class StudentImportService {
           if (existing) {
             await tx.student.update({ where: { id: existing.id }, data });
             studentId = existing.id;
-            updated++;
           } else {
             const student = await tx.student.create({
               data: { ...data, registrationNumber: row.registrationNumber },
               select: { id: true }
             });
             studentId = student.id;
-            created++;
           }
 
-          if (!row.routeCode) return;
+          const result: { created: boolean; change: RoutePlan['change'] } = { created: !existing, change: 'none' };
+          if (!plan) return result;
 
-          const route = await tx.transportRoute.upsert({
-            where: { routeCode: row.routeCode },
-            update: {},
-            create: { routeCode: row.routeCode, name: row.routeCode }
-          });
-
+          // Re-read inside the transaction; the plan came from a read taken
+          // before the loop started.
+          const slabId = plan.slab?.id ?? null;
           const active = await tx.studentRouteAssignment.findFirst({
             where: { studentId, unassignedAt: null },
-            select: { id: true, routeId: true }
+            select: { id: true, routeId: true, slabId: true, pickupOrder: true, notes: true }
           });
-          if (active?.routeId === route.id) return;
+          if (active?.routeId === plan.route.id && active.slabId === slabId) return result;
 
           if (active) {
             await tx.studentRouteAssignment.update({
@@ -290,9 +454,25 @@ export class StudentImportService {
             data: { unassignedAt: new Date() }
           });
 
-          await tx.studentRouteAssignment.create({ data: { studentId, routeId: route.id } });
-          routesAssigned++;
+          // A slab change on the same route is a new history row, as with bulk
+          // assign, but the student's place on the run carries over.
+          const sameRoute = active?.routeId === plan.route.id;
+          await tx.studentRouteAssignment.create({
+            data: {
+              studentId,
+              routeId: plan.route.id,
+              slabId,
+              pickupOrder: sameRoute ? active.pickupOrder : null,
+              notes: sameRoute ? active.notes : null
+            }
+          });
+          result.change = sameRoute ? 'slab' : 'assign';
+          return result;
         });
+
+        if (outcome.created) created++; else updated++;
+        if (outcome.change === 'assign') routesAssigned++;
+        if (outcome.change === 'slab') slabsChanged++;
       } catch (error) {
         failures.push({
           rowNumber: row.rowNumber,
@@ -304,12 +484,15 @@ export class StudentImportService {
 
     return {
       dryRun: false,
-      total: parsed.length + rejected.length,
-      valid: parsed.length,
+      total,
+      valid: resolved.length,
       created,
       updated,
       routesAssigned,
+      slabsChanged,
       rejected: [...rejected, ...failures],
+      warnings,
+      unknownRoutes,
       sample: []
     };
   }
