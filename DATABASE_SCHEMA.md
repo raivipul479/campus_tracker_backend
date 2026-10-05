@@ -130,7 +130,34 @@ Rules to preserve:
   with several slabs is a 400; with one slab it picks that one.
 
 `students.distance_km` (written by student import's `parseSlabKm`) is only a hint
-for choosing a slab in the UI. It does not decide the fee — the assignment does.
+for choosing a slab. It does not decide the fee — the assignment does.
+
+Student sheet import (`StudentImportService.resolve`) follows the same rules.
+It reads two positional layouts — the transport list and the branch list, which
+adds Route Name at K (shifting slab/drop/fees right) and Branch at O — told
+apart by "Route Name" in the header row.
+
+- **A missing route is created, priced from the sheet.** With a Slab KMS range
+  it gets that band as a slab; without one its flat fee is the row's FEES. No
+  bus is assigned. Codes must pass the same pattern `RouteService` enforces.
+- **The slab is picked from Slab KMS** (the band's upper figure, `"0-5 KM"` → 5).
+  When no slab covers it, the band is added as a new slab — but only on a route
+  the import created, one already priced in slabs, or an unpriced one (no slabs
+  and a ₹0 flat fee, as older imports left them). A flat-priced route is never
+  given slabs. A band overlapping an existing slab is rejected.
+- **A new slab's fee is the most common FEES** among that import request's rows
+  for the route and band; rows that disagree surface as fee warnings. Fees that
+  depend on something other than route and band (e.g. class) cannot be
+  represented by a slab.
+- **An empty Slab KMS** keeps the student's current slab on that same route,
+  else the route's only slab, else the row is rejected.
+- **Branch** (branch layout only) sets `students.branch`; a value other than
+  JPS/JPIS rejects the row. Sheets without the column never clear it.
+- **A slab change on the same route closes the active assignment and opens a new
+  one**, as bulk assign does, carrying `pickup_order` and `notes` over.
+- **The sheet's FEES column is checked, not stored.** A difference from the slab
+  fee (or the route's flat fee) is reported as a warning; billing uses the
+  configured fee.
 
 ## Assignment Tables
 
