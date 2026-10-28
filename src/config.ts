@@ -68,6 +68,19 @@ export const config = {
     pollEnabled: (process.env.GPS_POLL_ENABLED ?? 'true') !== 'false',
     retentionDays: numberFromEnv('GPS_RETENTION_DAYS', 30)
   },
+  routing: {
+    // Draws a bus's trail along the road. Uses the Google Roads API when
+    // GOOGLE_ROADS_API_KEY is set (server-side key, never sent to a client),
+    // otherwise OSRM-compatible map matching: the public demo server is fine
+    // for a small fleet; point baseUrl at a self-hosted OSRM for heavier use.
+    // Set ROAD_SNAP_ENABLED=false to turn off.
+    googleRoadsApiKey: process.env.GOOGLE_ROADS_API_KEY ?? '',
+    baseUrl: process.env.ROUTING_API_BASE_URL ?? 'https://router.project-osrm.org',
+    enabled: (process.env.ROAD_SNAP_ENABLED ?? 'true') !== 'false',
+    timeoutMs: numberFromEnv('ROUTING_API_TIMEOUT_MS', 8000),
+    // Fixes closer together than this are parked-bus jitter and are dropped.
+    minSpacingMeters: numberFromEnv('ROAD_SNAP_MIN_SPACING_METERS', 25)
+  },
   db: {
     host: process.env.DB_HOST ?? '127.0.0.1',
     port: numberFromEnv('DB_PORT', 3306),

@@ -2,6 +2,7 @@ import { ApiError } from '../errors.js';
 import { prisma } from '../prisma.js';
 import { plateKey } from './gps-provider.js';
 import { GpsPoller } from './gps-poller.service.js';
+import { RoadSnapService } from './road-snap.service.js';
 
 /**
  * Vehicle positions, read from what the poller stored.
@@ -175,13 +176,20 @@ export class GpsService {
       take: limit
     });
 
+    const shaped = positions.reverse().map(position => shape(position, vehicle));
+    // The raw fixes stay as `positions`; `roadPath` is the same trip snapped to
+    // the streets, which is what a map should draw. Clients fall back to
+    // `positions` when it is empty.
+    const roadPath = await RoadSnapService.snap(shaped);
+
     return {
       vehicle: vehicle
         ? { id: vehicle.id, code: vehicle.vehicleCode, registrationNumber: vehicle.registrationNumber }
         : { id: null, code: '', registrationNumber: plate },
       count: positions.length,
       limit,
-      positions: positions.reverse().map(position => shape(position, vehicle))
+      positions: shaped,
+      roadPath: roadPath.map(point => ({ latitude: point.latitude, longitude: point.longitude }))
     };
   }
 }
